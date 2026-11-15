@@ -11,10 +11,15 @@
 - E-Control: daily; more often until `official_early_days` while last month's value is awaited;
   every `interval` while the download fails.
 
+Fixed times of day (window start and end, the nightly full download, the price time, the reference
+month after a month change) are moved by `jitter()`: a random amount within `spread`, new every day,
+so that installations with the same settings do not all ask Energy-Charts at the same second.
+
 `plan()` returns the due tasks and when the next one becomes due, so the coordinator wakes up
 exactly then (also at night, when only prices, E-Control or the month change may be due).
 """
 
+import hashlib
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, tzinfo
@@ -53,6 +58,8 @@ class Settings:
     official_interval: float
     official_early_interval: float
     official_early_days: int
+    spread: float = 0.0  # planned times move by up to +-spread/2 (0: off)
+    seed: str = ""  # per installation (the config entry's random id), so the shifts differ
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +86,23 @@ class Plan:
 
 def _at(day: date, clock: time, tz: tzinfo) -> float:
     return datetime.combine(day, clock, tz).timestamp()
+
+
+def jitter(s: Settings, day: date) -> float:
+    """The day's shift of the planned times, -spread/2 .. +spread/2 seconds.
+
+    Pseudo-random from the seed and the date: new every day (no fixed pattern that would mark an
+    installation), the same all day and after a restart, nothing to store.
+    """
+    if s.spread <= 0:
+        return 0.0
+    digest = hashlib.sha256(f"{s.seed}:{day.isoformat()}".encode()).digest()
+    return (int.from_bytes(digest[:8]) / 2**64 - 0.5) * s.spread
+
+
+def _slot(day: date, clock: time, tz: tzinfo, s: Settings) -> float:
+    """A planned time of day on `day`, shifted by the day's jitter."""
+    return _at(day, clock, tz) + jitter(s, day)
 
 
 def production_hours(series: Iterable[tuple[int, float | None]], tz: tzinfo, today: date) -> Production | None:
@@ -119,10 +143,10 @@ def production_window(now: float, tz: tzinfo, production: Production | None, s: 
     first, last = production
     today = datetime.fromtimestamp(now, tz).date()
     shift = (today - datetime.fromtimestamp(first, tz).date()).days
-    windows = [
-        (first + days * DAY + s.start_offset, last + days * DAY + s.end_offset)
-        for days in (shift - 1, shift, shift + 1)
-    ]
+    windows = []
+    for days in (shift - 1, shift, shift + 1):
+        moved = jitter(s, today + timedelta(days=days - shift))  # the shift of the window's own day
+        windows.append((first + days * DAY + s.start_offset + moved, last + days * DAY + s.end_offset + moved))
     return Window(
         inside=any(start <= now < end for start, end in windows),
         last_end=max((end for _, end in windows if end <= now), default=None),
@@ -131,11 +155,11 @@ def production_window(now: float, tz: tzinfo, production: Production | None, s: 
     )
 
 
-def _last_occurrence(now: float, clock: time, tz: tzinfo) -> tuple[float, date]:
-    """The latest time `clock` (local) at or before `now`, and its date."""
+def _last_occurrence(now: float, clock: time, tz: tzinfo, s: Settings) -> tuple[float, date]:
+    """The latest slot of `clock` (local, shifted by the day's jitter) at or before `now`, and its date."""
     today = datetime.fromtimestamp(now, tz).date()
-    day = today if _at(today, clock, tz) <= now else today - timedelta(days=1)
-    return _at(day, clock, tz), day
+    day = today if _slot(today, clock, tz, s) <= now else today - timedelta(days=1)
+    return _slot(day, clock, tz, s), day
 
 
 def _elapsed(since: float | None, now: float, wait: float) -> bool:
@@ -146,12 +170,14 @@ def plan(now: float, tz: tzinfo, s: Settings, st: Status) -> Plan:
     today = datetime.fromtimestamp(now, tz).date()
     end_of_today = _at(today + timedelta(days=1), time(), tz)
     end_of_tomorrow = _at(today + timedelta(days=2), time(), tz)
-    price_today = _at(today, s.price_time, tz)
+    price_today = _slot(today, s.price_time, tz, s)
     day = production_window(now, tz, st.production, s)
-    last_full_slot, last_full_day = _last_occurrence(now, s.full_refresh_time, tz)
+    last_full_slot, last_full_day = _last_occurrence(now, s.full_refresh_time, tz, s)
+    month_start = today.replace(day=1)
+    next_month = (month_start + timedelta(days=32)).replace(day=1)
 
     tasks: set[Task] = set()
-    wake: list[float] = [_at(last_full_day + timedelta(days=1), s.full_refresh_time, tz)]
+    wake: list[float] = [_slot(last_full_day + timedelta(days=1), s.full_refresh_time, tz, s)]
 
     # --- generation
     if st.full_refresh is None or st.full_refresh < last_full_slot:
@@ -176,10 +202,18 @@ def plan(now: float, tz: tzinfo, s: Settings, st: Status) -> Plan:
             tasks.add(Task.PRICE)
         wake.append(max(price_today, (st.price_attempt or now) + s.price_retry))
     else:
-        wake.append(_at(today + timedelta(days=1), s.price_time, tz))
+        wake.append(_slot(today + timedelta(days=1), s.price_time, tz, s))
+
+    # --- reference month: after a month change only after the day's shift (0 .. spread after midnight)
+    def reference_slot(first_day: date) -> float:
+        return _at(first_day, time(), tz) + jitter(s, first_day) + s.spread / 2
 
     if st.reference_missing:
-        tasks.add(Task.REFERENCE)
+        if now >= reference_slot(month_start):
+            tasks.add(Task.REFERENCE)
+        else:
+            wake.append(reference_slot(month_start))
+    wake.append(reference_slot(next_month))
 
     # --- E-Control
     if st.official_failing:
@@ -193,8 +227,7 @@ def plan(now: float, tz: tzinfo, s: Settings, st: Status) -> Plan:
     wake.append((st.official_attempt or now) + wait)
 
     # --- month change: the estimate switches to the new month even if nothing is downloaded
-    first = today.replace(day=1)
-    wake.append(_at((first + timedelta(days=32)).replace(day=1), time(), tz))
+    wake.append(_at(next_month, time(), tz))
 
     # --- Energy-Charts asked us to wait
     if st.not_before is not None and now < st.not_before:

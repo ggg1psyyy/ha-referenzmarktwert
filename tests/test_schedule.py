@@ -13,6 +13,7 @@ from custom_components.referenzmarktwert.schedule import (
     Settings,
     Status,
     Task,
+    jitter,
     plan,
     production_hours,
     production_window,
@@ -291,3 +292,52 @@ def test_skipping_the_night_changes_almost_nothing() -> None:
     assert full.month_so_far == pytest.approx(0.1771, abs=0.0001)
     assert cut.month_so_far == pytest.approx(full.month_so_far, abs=0.00001)  # < 0.001 ct/kWh
     assert cut.known_share == pytest.approx(full.known_share)
+
+
+# --- spread ---------------------------------------------------------------------------------------
+
+SPREAD = replace(S, spread=600, seed="entry-a")  # +-5 min
+
+
+def test_jitter_stays_in_range_and_changes_daily() -> None:
+    days = [date(2026, 1, 1) + timedelta(days=n) for n in range(365)]
+    shifts = [jitter(SPREAD, d) for d in days]
+    assert all(-300 <= x < 300 for x in shifts)
+    assert min(shifts) < -250 and max(shifts) > 250  # the whole range is used
+    assert len(set(shifts)) == len(shifts)  # new every day: no fixed pattern
+    assert jitter(SPREAD, days[0]) == jitter(replace(SPREAD), days[0])  # the same after a restart
+    assert jitter(replace(SPREAD, seed="entry-b"), days[0]) != shifts[0]  # differs between installations
+    assert jitter(S, days[0]) == 0.0  # spread 0: off
+
+
+def test_planned_times_move_by_the_days_jitter() -> None:
+    day = date(2026, 11, 16)
+    moved = jitter(SPREAD, day)
+    assert moved != 0
+    # the window starts later or earlier, the same for its end
+    window = production_window(at("2026-11-16T05:00"), TZ, PRODUCTION, SPREAD)
+    assert window.next_start == at("2026-11-16T08:00") + moved
+    assert window.next_end == at("2026-11-16T19:30") + moved
+    # nightly full download
+    assert plan(at("2026-11-16T01:50"), TZ, SPREAD, status(full_refresh=at("2026-11-15T02:00"))).next_run == (
+        at("2026-11-16T02:00") + moved
+    )
+    # tomorrow's prices
+    st = status(
+        prices_until=at("2026-11-17T00:00"),
+        price_attempt=at("2026-11-16T03:00"),
+        generation_attempt=at("2026-11-16T12:50"),  # the next generation download only at 13:50
+    )
+    assert plan(at("2026-11-16T13:00"), TZ, SPREAD, st).next_run == at("2026-11-16T13:30") + moved
+
+
+def test_reference_month_waits_for_the_spread_after_midnight() -> None:
+    """At a month change every installation needs last year's month: not all at midnight."""
+    first = date(2026, 12, 1)
+    slot = at("2026-12-01T00:00") + jitter(SPREAD, first) + 300  # 0 .. 10 min after midnight
+    st = status(reference_missing=True, generation_attempt=at("2026-11-30T23:00"), prices_until=at("2026-12-02T00:00"))
+    early = plan(at("2026-12-01T00:00"), TZ, SPREAD, st)
+    assert Task.REFERENCE not in early.tasks
+    assert early.next_run == max(slot, at("2026-12-01T00:01"))  # at least a minute between runs
+    assert Task.REFERENCE in plan(slot, TZ, SPREAD, st).tasks
+    assert Task.REFERENCE in plan(at("2026-12-01T00:00"), TZ, S, st).tasks  # spread 0: at once

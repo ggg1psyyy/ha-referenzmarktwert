@@ -55,6 +55,7 @@ from .const import (
     CONF_PRIOR_METHOD,
     CONF_PRODUCTION_TYPE,
     CONF_REQUEST_DELAY,
+    CONF_SPREAD,
     CONF_START_OFFSET,
     CONF_TIME_ZONE,
     CONF_TIMEOUT,
@@ -141,7 +142,8 @@ def fingerprint(data: Mapping[str, Any]) -> str:
     return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
-def schedule_settings(options: Mapping[str, Any]) -> schedule.Settings:
+def schedule_settings(options: Mapping[str, Any], seed: str = "") -> schedule.Settings:
+    """The schedule's settings from a config entry's options; `seed`: the entry's id (see `jitter`)."""
     o = entry_options(options)
     return schedule.Settings(
         interval=float(o[CONF_UPDATE_INTERVAL]) * 60,
@@ -153,6 +155,8 @@ def schedule_settings(options: Mapping[str, Any]) -> schedule.Settings:
         official_interval=float(o[CONF_OFFICIAL_INTERVAL]) * 3600,
         official_early_interval=float(o[CONF_OFFICIAL_EARLY_INTERVAL]) * 3600,
         official_early_days=int(o[CONF_OFFICIAL_EARLY_DAYS]),
+        spread=float(o[CONF_SPREAD]) * 60,
+        seed=seed,
     )
 
 
@@ -177,7 +181,7 @@ class ReferenzmarktwertCoordinator(DataUpdateCoordinator[ReferenzmarktwertData])
 
     def __init__(self, hass: HomeAssistant, entry: ReferenzmarktwertConfigEntry) -> None:
         self._options = entry_options(entry.options)
-        self._settings = schedule_settings(self._options)
+        self._settings = schedule_settings(self._options, entry.entry_id)
         super().__init__(
             hass,
             _LOGGER,

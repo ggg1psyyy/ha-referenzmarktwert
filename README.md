@@ -69,6 +69,7 @@ All values in **EUR/kWh**.
 | | Tomorrow's prices from / retry interval | 13:30 / 30 min |
 | | Official values: check interval / while awaited / awaited until day | 24 h / 3 h / 15 |
 | | Pause between requests | 1 s |
+| | Random spread of the planned download times (new every day; 0 = off) | 10 min |
 | Setup section *Data sources*, **Reconfigure** | Energy-Charts API URL, generation and price paths | `https://api.energy-charts.info`, `/public_power`, `/price` |
 | | Country, bidding zone, generation type | `at`, `AT`, `Solar` |
 | | Extra HTTP header for Energy-Charts (name, value — e.g. an API key) | none |
@@ -135,14 +136,16 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for design decisions and their reasons.
 Everything is downloaded by your Home Assistant directly from the two sources; nothing is sent anywhere else. The
 requests carry only their parameters and Home Assistant's standard User-Agent (Home Assistant, aiohttp and Python
 versions), plus the optional extra headers you configure. Home Assistant's home location is not used: the download
-times follow the national generation data, so they reveal nothing about where you live. Times below are local (Europe/Vienna), with the default
+times follow the national generation data, so they reveal nothing about where you live. The planned times (window
+start and end, the nightly full download, the price time, last year's month after a month change) move by a random
+amount of up to ±5 min, new every day, so that not every installation asks at the same second. Times below are local (Europe/Vienna), with the default
 settings. `start`/`end` are Unix seconds.
 
 | What | Request | When |
 |---|---|---|
 | PV generation of the running month (Energy-Charts answers with every generation type; only `Solar` is used) | `https://api.energy-charts.info/public_power?country=at&start=…&end=…` | in the **production window** (yesterday's first generation + 2 h until its last generation + 2.5 h, e.g. 07:45–22:15 in mid-October) every 60 min, only the hours since the last stored point (minus a 3 h overlap); once more after the window; **once a night** (02:00) the whole running month |
 | Day-ahead prices (EUR/MWh) | `https://api.energy-charts.info/price?bzn=AT&start=…&end=…` | **once a day** after the auction (from 13:30, again every 30 min until tomorrow's prices are there); at once if today's are missing |
-| PV generation of the same month last year (for the expected generation share) | `https://api.energy-charts.info/public_power?country=at&start=…&end=…` | once a month |
+| PV generation of the same month last year (for the expected generation share) | `https://api.energy-charts.info/public_power?country=at&start=…&end=…` | once a month (0–10 min after midnight on the 1st) |
 | Official values | `https://www.e-control.at/documents/1785851/10823410/Referenzmarktwert_Entwicklung.xlsx` | checked daily, every 3 h until the 15th while last month's value is awaited; transferred **only if it changed** (`If-Modified-Since`; otherwise the server answers `304 Not Modified` without content) |
 
 If Energy-Charts ever marks these endpoints as deprecated (it announces that at least six months ahead in every

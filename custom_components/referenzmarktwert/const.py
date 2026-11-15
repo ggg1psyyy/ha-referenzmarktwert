@@ -87,6 +87,8 @@ DEFAULT_OFFICIAL_INTERVAL_HOURS: Final = 24  # E-Control file, normally (only do
 DEFAULT_OFFICIAL_EARLY_INTERVAL_HOURS: Final = 3  # ... while last month's value is awaited
 DEFAULT_OFFICIAL_EARLY_DAYS: Final = 15  # "awaited": until this day of the month
 DEFAULT_REQUEST_DELAY_SECONDS: Final = 1.0  # pause between requests (rate limit)
+# planned times move by a random amount within this range, new each day (spreads the load on Energy-Charts)
+DEFAULT_SPREAD_MINUTES: Final = 10
 PRICE_LOOKAHEAD_SECONDS: Final = 2 * 86400  # prices are asked until now + 2 days; the API returns what exists
 
 # --- Config entry keys ---------------------------------------------------------------------------
@@ -124,6 +126,7 @@ CONF_FULL_REFRESH_TIME: Final = "full_refresh_time"
 CONF_PRICE_TIME: Final = "price_time"
 CONF_PRICE_RETRY: Final = "price_retry_minutes"
 CONF_OFFICIAL_EARLY_DAYS: Final = "official_early_days"
+CONF_SPREAD: Final = "spread_minutes"
 
 DEFAULT_DATA: Final = {
     CONF_ENERGY_CHARTS_URL: DEFAULT_ENERGY_CHARTS_BASE_URL,
@@ -160,6 +163,7 @@ DEFAULT_OPTIONS: Final = {
     CONF_OFFICIAL_EARLY_INTERVAL: DEFAULT_OFFICIAL_EARLY_INTERVAL_HOURS,
     CONF_OFFICIAL_EARLY_DAYS: DEFAULT_OFFICIAL_EARLY_DAYS,
     CONF_REQUEST_DELAY: DEFAULT_REQUEST_DELAY_SECONDS,
+    CONF_SPREAD: DEFAULT_SPREAD_MINUTES,
 }
 
 

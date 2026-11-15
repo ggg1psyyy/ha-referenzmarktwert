@@ -17,6 +17,7 @@ from yarl import URL
 from custom_components.referenzmarktwert import sources
 from custom_components.referenzmarktwert.const import (
     CONF_REQUEST_DELAY,
+    CONF_SPREAD,
     DEFAULT_DATA,
     DEFAULT_ECONTROL_XLSX_URL,
     DEFAULT_ENERGY_CHARTS_BASE_URL,
@@ -59,7 +60,7 @@ def config_entry() -> MockConfigEntry:
         title="Referenzmarktwert PV",
         unique_id="at_at_solar_d",
         data=dict(DEFAULT_DATA),
-        options={**DEFAULT_OPTIONS, CONF_REQUEST_DELAY: 0},
+        options={**DEFAULT_OPTIONS, CONF_REQUEST_DELAY: 0, CONF_SPREAD: 0},  # exact times in the tests
     )
 
 

@@ -124,7 +124,8 @@
           "official_interval_hours": "Official values: check interval",
           "official_early_interval_hours": "Official values: check interval while awaited",
           "official_early_days": "Official values: awaited until day",
-          "request_delay_seconds": "Pause between requests"
+          "request_delay_seconds": "Pause between requests",
+          "spread_minutes": "Random spread of the download times"
         },
         "data_description": {
           "deduction": "Subtracted from the market value for the payout sensors (Hofer Sonne: 0.015 EUR/kWh).",
@@ -140,7 +141,8 @@
           "official_interval_hours": "How often the E-Control file is checked. It is only downloaded if it changed.",
           "official_early_interval_hours": "Used at the start of the month while last month's value is not published yet.",
           "official_early_days": "Until this day of the month the shorter interval is used (published so far: day 2-14).",
-          "request_delay_seconds": "Energy-Charts limits how often it may be asked."
+          "request_delay_seconds": "Energy-Charts limits how often it may be asked.",
+          "spread_minutes": "The planned download times (start and end of the production window, nightly full download, prices after the auction, last year's month after a month change) move by a random amount within this range, new every day, so that not all installations ask Energy-Charts at the same second. 0: off."
         }
       }
     }

@@ -124,7 +124,8 @@
           "official_interval_hours": "Offizielle Werte: Prüfintervall",
           "official_early_interval_hours": "Offizielle Werte: Prüfintervall solange erwartet",
           "official_early_days": "Offizielle Werte: erwartet bis Tag",
-          "request_delay_seconds": "Pause zwischen Anfragen"
+          "request_delay_seconds": "Pause zwischen Anfragen",
+          "spread_minutes": "Zufällige Streuung der Downloadzeiten"
         },
         "data_description": {
           "deduction": "Wird für die Vergütungs-Sensoren vom Marktwert abgezogen (Hofer Sonne: 0,015 EUR/kWh).",
@@ -140,7 +141,8 @@
           "official_interval_hours": "Wie oft die E-Control-Datei geprüft wird. Geladen wird sie nur, wenn sie sich geändert hat.",
           "official_early_interval_hours": "Gilt am Monatsanfang, solange der Wert des Vormonats noch nicht veröffentlicht ist.",
           "official_early_days": "Bis zu diesem Tag des Monats gilt das kürzere Intervall (bisher veröffentlicht: Tag 2-14).",
-          "request_delay_seconds": "Energy-Charts begrenzt, wie oft es abgefragt werden darf."
+          "request_delay_seconds": "Energy-Charts begrenzt, wie oft es abgefragt werden darf.",
+          "spread_minutes": "Die geplanten Downloadzeiten (Beginn und Ende des Erzeugungsfensters, nächtlicher Komplett-Download, Preise nach der Auktion, Vorjahresmonat nach dem Monatswechsel) verschieben sich um einen zufälligen Wert in diesem Bereich, jeden Tag neu, damit nicht alle Installationen Energy-Charts in derselben Sekunde abfragen. 0: aus."
         }
       }
     }

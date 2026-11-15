@@ -160,6 +160,13 @@ for prices, E-Control, the month change — and a long daytime interval cannot s
   data is). The first download always reaches back to yesterday (a guard: on the 1st the previous month is
   normally still unofficial and downloaded anyway), a window past
   midnight is handled by also looking at yesterday's window, and without any generation data there is no gating.
+- **Spread**: every installation with the default settings would otherwise ask at the same second (window start
+  and the hourly downloads after it, 02:00, 13:30, midnight on the 1st). The planned times of day move by
+  `schedule.jitter()`: ±spread/2 (option, default 10 min), pseudo-random from the entry's random id and the date —
+  new every day (a fixed shift would be a pattern that marks an installation across IP changes), the same all day
+  and after a restart, nothing stored. The window start and end move together; last year's month waits 0..spread
+  after midnight (the estimate still switches to the new month at midnight). Intervals and retries are
+  relative to the last attempt and therefore follow the shifted times.
 - **One full download per night** (02:00, option) of the running month — plus the previous month while it is not
   official — as a safety net in case Energy-Charts revises older values (not observed yet; not verifiable from one
   day's recordings).
@@ -287,3 +294,4 @@ better mid-month, worse early, not adopted.
 - 2026-11-15 — Download window from the generation data (yesterday's first/last value > 0 + 2 h / + 2.5 h) instead
   of sunrise/sunset at Home Assistant's home location: the request times no longer reveal the location. Options
   renamed (`start_offset_minutes`, `end_offset_minutes`).
+- 2026-11-15 — Daily random spread of the planned download times (±5 min, option `spread_minutes`).

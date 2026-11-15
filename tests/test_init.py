@@ -1,7 +1,7 @@
 """Setup, sensors, download schedule, stored data, failures and unloading in a real (test) Home Assistant."""
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -21,8 +21,9 @@ from custom_components.referenzmarktwert.const import (
     DEFAULT_ENERGY_CHARTS_BASE_URL,
     DOMAIN,
 )
-from custom_components.referenzmarktwert.coordinator import deprecation_issue_id, storage_key
+from custom_components.referenzmarktwert.coordinator import deprecation_issue_id, schedule_settings, storage_key
 from custom_components.referenzmarktwert.diagnostics import async_get_config_entry_diagnostics
+from custom_components.referenzmarktwert.schedule import jitter
 
 from .conftest import (
     FIXTURES,
@@ -169,6 +170,27 @@ async def test_first_download_includes_yesterday(
     energy_charts.mock_calls.clear()
     await wait_until(hass, freezer, "2026-11-01T22:55:00+00:00")  # 23:55 Vienna
     assert requests_to(energy_charts, GENERATION_URL) == []
+
+
+@pytest.mark.freeze_time("2026-10-15T20:30:00+00:00")  # 22:30 Vienna
+async def test_download_times_are_spread(
+    hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts, freezer: FrozenDateTimeFactory
+) -> None:
+    """With the default spread the nightly full download is at 02:00 + this entry's shift of the day."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, entry_id="spread-test", data=dict(config_entry.data), options={CONF_REQUEST_DELAY: 0}
+    )
+    await setup(hass, entry)
+    settings = schedule_settings(entry.options, entry.entry_id)
+    moved = jitter(settings, date(2026, 10, 16))
+    assert settings.spread == 600 and moved != 0
+    slot = datetime.fromisoformat("2026-10-16T02:00:00+02:00").timestamp() + moved
+    energy_charts.mock_calls.clear()
+    await wait_until(hass, freezer, datetime.fromtimestamp(slot - 30, UTC).isoformat())
+    assert requests_to(energy_charts, GENERATION_URL) == []
+    await wait_until(hass, freezer, datetime.fromtimestamp(slot + 30, UTC).isoformat())
+    assert len(requests_to(energy_charts, GENERATION_URL)) == 1  # the full download, at its shifted time
+    assert abs(requests_to(energy_charts, GENERATION_URL)[0]["end"] - slot) <= 30
 
 
 @pytest.mark.freeze_time("2026-10-15T09:00:00+00:00")

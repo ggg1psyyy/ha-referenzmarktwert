@@ -57,6 +57,7 @@ from .const import (
     CONF_PRIOR_METHOD,
     CONF_PRODUCTION_TYPE,
     CONF_REQUEST_DELAY,
+    CONF_SPREAD,
     CONF_START_OFFSET,
     CONF_TIME_ZONE,
     CONF_TIMEOUT,
@@ -290,6 +291,7 @@ class ReferenzmarktwertOptionsFlow(OptionsFlowWithReload):
                     current, CONF_OFFICIAL_EARLY_DAYS, probatio.All(_number_selector(1, 31, 1), probatio.Coerce(int))
                 ),
                 **_option(current, CONF_REQUEST_DELAY, _number_selector(0, 30, 0.5, "s")),
+                **_option(current, CONF_SPREAD, _number_selector(0, 60, 1, "min")),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
