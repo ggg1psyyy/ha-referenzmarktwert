@@ -65,6 +65,14 @@ class SourceDataError(SourceError):
 # --- HTTP helper ---------------------------------------------------------------------------------
 
 
+@dataclass(frozen=True, slots=True)
+class HttpResult:
+    """A successful GET: the body, or None for "304 Not Modified"; plus the Last-Modified header."""
+
+    body: bytes | None
+    last_modified: str | None
+
+
 async def _get(
     session: aiohttp.ClientSession,
     url: str,
@@ -72,15 +80,26 @@ async def _get(
     params: Mapping[str, str | int] | None,
     headers: Mapping[str, str],
     timeout: float,
-) -> bytes:
-    """GET `url` and return the body; map every failure to a SourceError."""
+    if_modified_since: str | None = None,
+) -> HttpResult:
+    """GET `url`; map every failure to a SourceError.
+
+    With `if_modified_since` (an earlier Last-Modified value) the server may answer 304 and send
+    nothing: the caller's copy is still current.
+    """
+    request_headers = dict(headers)
+    if if_modified_since:
+        request_headers["If-Modified-Since"] = if_modified_since
     try:
         async with session.get(
             url,
             params=params,
-            headers=dict(headers),
+            headers=request_headers,
             timeout=aiohttp.ClientTimeout(total=timeout),
         ) as response:
+            last_modified = response.headers.get("Last-Modified")
+            if response.status == 304 and if_modified_since:
+                return HttpResult(None, last_modified or if_modified_since)
             if response.status == 429:
                 raise SourceRateLimitError(f"{url}: rate limited (HTTP 429)", _retry_after(response))
             if response.status != 200:
@@ -89,7 +108,7 @@ async def _get(
                 if 400 <= response.status < 500:
                     detail = ": " + (await response.text(errors="replace"))[:200]
                 raise SourceConnectionError(f"{url}: HTTP {response.status}{detail}", response.status)
-            return await response.read()
+            return HttpResult(await response.read(), last_modified)
     except TimeoutError as err:
         raise SourceConnectionError(f"{url}: timeout after {timeout} s") from err
     except aiohttp.ClientError as err:
@@ -173,7 +192,7 @@ class EnergyChartsClient:
     async def _fetch(self, path: str, params: dict[str, str | int], what: str) -> Any | None:
         """The JSON answer, or None if the window holds no data yet (HTTP 404 "no content available")."""
         try:
-            body = await _get(
+            result = await _get(
                 self._session,
                 self.config.base_url.rstrip("/") + path,
                 params=params,
@@ -185,7 +204,7 @@ class EnergyChartsClient:
             if err.status == 404 and NO_CONTENT in str(err):
                 return None
             raise
-        return _json(body, what)
+        return _json(result.body or b"", what)
 
     async def generation(self, start: int, end: int) -> list[tuple[int, float | None]]:
         """Generation of the configured production type, quarter-hourly, MW. `end` is inclusive."""
@@ -364,10 +383,28 @@ def _parse_econtrol_xlsx(data: bytes, cfg: EControlConfig) -> dict[Month, Offici
     return result
 
 
+@dataclass(frozen=True, slots=True)
+class EControlResult:
+    """The parsed table, or None if the file has not changed since `if_modified_since`."""
+
+    table: dict[Month, OfficialValue] | None
+    last_modified: str | None  # the server's Last-Modified header, for the next conditional request
+
+
 async def fetch_econtrol(
-    session: aiohttp.ClientSession, config: EControlConfig | None = None
-) -> dict[Month, OfficialValue]:
-    """Download and parse the E-Control history file."""
+    session: aiohttp.ClientSession,
+    config: EControlConfig | None = None,
+    if_modified_since: str | None = None,
+) -> EControlResult:
+    """Download and parse the E-Control history file.
+
+    With `if_modified_since` (the Last-Modified value of the copy the caller holds) the file is only
+    transferred if it changed; otherwise the result's table is None.
+    """
     cfg = config or EControlConfig()
-    body = await _get(session, cfg.url, params=None, headers=cfg.headers, timeout=cfg.timeout)
-    return parse_econtrol_xlsx(body, cfg)
+    result = await _get(
+        session, cfg.url, params=None, headers=cfg.headers, timeout=cfg.timeout, if_modified_since=if_modified_since
+    )
+    if result.body is None:
+        return EControlResult(None, result.last_modified)
+    return EControlResult(parse_econtrol_xlsx(result.body, cfg), result.last_modified)

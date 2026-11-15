@@ -168,3 +168,10 @@ def test_base_price_and_time_share() -> None:
     assert calc.time_share(0, 100, 25) == 0.25
     assert calc.time_share(0, 100, -5) == 0.0
     assert calc.time_share(0, 100, 500) == 1.0
+
+
+def test_resolution() -> None:
+    """The time step comes from the data (some bidding zones have hourly prices)."""
+    assert calc.resolution([(0, 1.0), (900, 1.0), (1800, None)], 3600) == 900
+    assert calc.resolution([(0, 1.0), (3600, 1.0), (7200, 1.0)], 900) == 3600
+    assert calc.resolution([(0, 1.0)], 900) == 900

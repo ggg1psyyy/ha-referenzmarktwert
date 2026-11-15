@@ -16,6 +16,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, tzinfo
+from itertools import pairwise
 from statistics import fmean
 
 from .const import DEFAULT_AGGREGATION_SECONDS, DEFAULT_PRIOR_METHOD, KWH_PER_MWH, PriorMethod
@@ -145,6 +146,13 @@ def covered_until(series: Series, step: int) -> int | None:
     """End of the latest point that has a value: its timestamp + `step` (the point's duration)."""
     stamps = [ts for ts, value in series if value is not None]
     return max(stamps) + step if stamps else None
+
+
+def resolution(series: Series, default: int) -> int:
+    """The series' time step: the smallest gap between two points (`default` with fewer than two)."""
+    stamps = sorted({ts for ts, _ in series})
+    gaps = [b - a for a, b in pairwise(stamps)]
+    return min(gaps) if gaps else default
 
 
 def floor_to(ts: int, period: int) -> int:

@@ -29,6 +29,7 @@ from custom_components.referenzmarktwert.sources import (
 
 FIXTURES = Path(__file__).parent / "fixtures"
 XLSX = FIXTURES / "Referenzmarktwert_Entwicklung.xlsx"
+LAST_MODIFIED = "Thu, 05 Nov 2026 14:54:13 GMT"
 
 
 def fixture_json(name: str) -> dict:
@@ -157,9 +158,11 @@ async def server(socket_enabled: None):
     Home Assistant's test plugin blocks sockets; `socket_enabled` allows them for these tests only.
     """
     requests: list[tuple[str, dict[str, str]]] = []
+    server_headers: list[dict[str, str]] = []
 
     async def handle(request: web.Request) -> web.Response:
         requests.append((request.path, dict(request.query)))
+        server_headers.append(dict(request.headers))
         if request.query.get("bzn") == "LIMIT":
             return web.Response(status=429, headers={"Retry-After": "7"})
         if request.query.get("bzn") == "BROKEN":
@@ -169,7 +172,9 @@ async def server(socket_enabled: None):
         if request.path.endswith("/public_power"):
             return web.json_response(fixture_json("public_power_at_2026-10.json"))
         if request.path.endswith(".xlsx"):
-            return web.Response(body=XLSX.read_bytes())
+            if request.headers.get("If-Modified-Since") == LAST_MODIFIED:
+                return web.Response(status=304, headers={"Last-Modified": LAST_MODIFIED})
+            return web.Response(body=XLSX.read_bytes(), headers={"Last-Modified": LAST_MODIFIED})
         return web.Response(status=404)
 
     app = web.Application()
@@ -177,6 +182,7 @@ async def server(socket_enabled: None):
     test_server = TestServer(app)
     await test_server.start_server()
     test_server.requests = requests
+    test_server.headers = server_headers
     yield test_server
     await test_server.close()
 
@@ -218,9 +224,34 @@ async def test_client_connection_refused(socket_enabled: None) -> None:
 
 
 async def test_fetch_econtrol(server: TestServer) -> None:
+    config = EControlConfig(url=str(server.make_url("/x.xlsx")), headers={"X-Test": "1"})
     async with aiohttp.ClientSession() as session:
-        values = await sources.fetch_econtrol(session, EControlConfig(url=str(server.make_url("/x.xlsx"))))
-    assert values[(2026, 10)].value == pytest.approx(0.1771)
+        result = await sources.fetch_econtrol(session, config)
+    assert result.table[(2026, 10)].value == pytest.approx(0.1771)
+    assert result.last_modified == LAST_MODIFIED
+    assert server.headers[-1]["X-Test"] == "1"  # the E-Control header is sent
+    assert "If-Modified-Since" not in server.headers[-1]
+
+
+async def test_fetch_econtrol_not_modified(server: TestServer) -> None:
+    """With the Last-Modified date of the copy we hold, an unchanged file is not transferred."""
+    config = EControlConfig(url=str(server.make_url("/x.xlsx")))
+    async with aiohttp.ClientSession() as session:
+        result = await sources.fetch_econtrol(session, config, if_modified_since=LAST_MODIFIED)
+        changed = await sources.fetch_econtrol(session, config, if_modified_since="Mon, 05 Oct 2026 10:00:00 GMT")
+    assert result.table is None
+    assert result.last_modified == LAST_MODIFIED
+    assert server.headers[-2]["If-Modified-Since"] == LAST_MODIFIED
+    assert changed.table is not None  # an older date: the file is downloaded
+
+
+async def test_unexpected_304_is_an_error(aioclient_mock) -> None:
+    """A 304 without a conditional request makes no sense: it must not be taken as "no change"."""
+    aioclient_mock.get("https://ec.test/x.xlsx", status=304)
+    session = aioclient_mock.create_session(asyncio.get_running_loop())
+    with pytest.raises(SourceConnectionError, match="304"):
+        await sources.fetch_econtrol(session, EControlConfig(url="https://ec.test/x.xlsx"))
+    await session.close()
 
 
 # --- Live (opt-in) -------------------------------------------------------------------------------
@@ -244,8 +275,10 @@ async def test_live_energy_charts(internet: None) -> None:
 @live
 async def test_live_econtrol(internet: None) -> None:
     async with aiohttp.ClientSession() as session:
-        values = await sources.fetch_econtrol(session)
-    assert values[(2026, 10)].value == pytest.approx(0.1771)
+        result = await sources.fetch_econtrol(session)
+        unchanged = await sources.fetch_econtrol(session, if_modified_since=result.last_modified)
+    assert result.table[(2026, 10)].value == pytest.approx(0.1771)
+    assert unchanged.table is None  # E-Control answers 304 for an unchanged file
 
 
 def test_parse_xlsx_invalid_xml_becomes_source_error() -> None:

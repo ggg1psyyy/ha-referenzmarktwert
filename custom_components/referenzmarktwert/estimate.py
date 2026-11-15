@@ -87,7 +87,7 @@ def estimate_month(
     previous = calc.shift_month(month, -1)
 
     # Only complete hours count: a partial latest hour would be weighted with an incomplete mean.
-    gen_end = calc.covered_until(current.generation, QUARTER_HOUR)
+    gen_end = calc.covered_until(current.generation, calc.resolution(current.generation, QUARTER_HOUR))
     generation_until = min(calc.floor_to(gen_end, period), end) if gen_end is not None else None
     so_far = (
         calc.market_value(current.generation, current.price, start, generation_until, period)
@@ -114,7 +114,7 @@ def estimate_month(
     else:
         previous_source = PreviousSource.MISSING
 
-    price_end = calc.covered_until(current.price, QUARTER_HOUR)
+    price_end = calc.covered_until(current.price, calc.resolution(current.price, QUARTER_HOUR))
     prices_until = min(price_end, end) if price_end is not None else None
     running_base = None
     weight = 0.0

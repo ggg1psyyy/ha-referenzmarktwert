@@ -63,11 +63,24 @@ DEFAULT_TIME_ZONE: Final = "Europe/Vienna"  # months are assigned in this zone
 KWH_PER_MWH: Final = 1000.0
 
 # --- Polling -------------------------------------------------------------------------------------
-DEFAULT_UPDATE_INTERVAL_MINUTES: Final = 60  # Energy-Charts data; generation lags ~2 h anyway
-DEFAULT_OFFICIAL_INTERVAL_HOURS: Final = 24  # E-Control file, normally
+# Generation is fetched only while the sun can produce: from sunrise + offset until sunset + offset
+# (Energy-Charts lags ~2 h, so the window ends a few hours after sunset). Each download asks only
+# for the hours since the last stored point (minus an overlap for late corrections); one full
+# download of the running month per night catches anything else.
+DEFAULT_UPDATE_INTERVAL_MINUTES: Final = 60  # generation during the daylight window
+DEFAULT_SUNRISE_OFFSET_MINUTES: Final = 60  # window starts this long after sunrise
+DEFAULT_SUNSET_OFFSET_MINUTES: Final = 180  # ... and ends this long after sunset
+DEFAULT_OVERLAP_HOURS: Final = 3  # each download repeats the last hours (late or corrected values)
+DEFAULT_FULL_REFRESH_TIME: Final = "02:00:00"  # nightly full download of the running month (local time)
+# Day-ahead prices are published once a day (auction ~12:00, results ~12:45-13:00 CET).
+DEFAULT_PRICE_TIME: Final = "13:30:00"  # look for tomorrow's prices from this local time ...
+DEFAULT_PRICE_RETRY_MINUTES: Final = 30  # ... and again this often until they are there
+# E-Control: published on day 2-14 of the following month (2022-01..2026-10, mostly 2-9).
+DEFAULT_OFFICIAL_INTERVAL_HOURS: Final = 24  # E-Control file, normally (only downloaded if changed)
 DEFAULT_OFFICIAL_EARLY_INTERVAL_HOURS: Final = 3  # ... while last month's value is awaited
-OFFICIAL_EARLY_DAYS: Final = 10  # "awaited": until this day of the month (observed: 2nd-7th)
-DEFAULT_REQUEST_DELAY_SECONDS: Final = 1.0  # pause between Energy-Charts requests (rate limit)
+DEFAULT_OFFICIAL_EARLY_DAYS: Final = 15  # "awaited": until this day of the month
+DEFAULT_REQUEST_DELAY_SECONDS: Final = 1.0  # pause between requests (rate limit)
+PRICE_LOOKAHEAD_SECONDS: Final = 2 * 86400  # prices are asked until now + 2 days; the API returns what exists
 
 # --- Config entry keys ---------------------------------------------------------------------------
 # entry.data: where the data comes from (changed with "Reconfigure")
@@ -79,6 +92,8 @@ CONF_BIDDING_ZONE: Final = "bidding_zone"
 CONF_PRODUCTION_TYPE: Final = "production_type"
 CONF_HEADER_NAME: Final = "header_name"  # optional extra HTTP header for Energy-Charts (e.g. an API key)
 CONF_HEADER_VALUE: Final = "header_value"
+CONF_ECONTROL_HEADER_NAME: Final = "econtrol_header_name"  # ... and for the E-Control download
+CONF_ECONTROL_HEADER_VALUE: Final = "econtrol_header_value"
 CONF_ECONTROL_URL: Final = "econtrol_url"
 CONF_ECONTROL_MONTH_COLUMN: Final = "econtrol_month_column"
 CONF_ECONTROL_VALUE_COLUMN: Final = "econtrol_value_column"
@@ -95,6 +110,13 @@ CONF_UPDATE_INTERVAL: Final = "update_interval_minutes"
 CONF_OFFICIAL_INTERVAL: Final = "official_interval_hours"
 CONF_OFFICIAL_EARLY_INTERVAL: Final = "official_early_interval_hours"
 CONF_REQUEST_DELAY: Final = "request_delay_seconds"
+CONF_SUNRISE_OFFSET: Final = "sunrise_offset_minutes"
+CONF_SUNSET_OFFSET: Final = "sunset_offset_minutes"
+CONF_OVERLAP: Final = "overlap_hours"
+CONF_FULL_REFRESH_TIME: Final = "full_refresh_time"
+CONF_PRICE_TIME: Final = "price_time"
+CONF_PRICE_RETRY: Final = "price_retry_minutes"
+CONF_OFFICIAL_EARLY_DAYS: Final = "official_early_days"
 
 DEFAULT_DATA: Final = {
     CONF_ENERGY_CHARTS_URL: DEFAULT_ENERGY_CHARTS_BASE_URL,
@@ -106,6 +128,8 @@ DEFAULT_DATA: Final = {
     CONF_HEADER_NAME: "",
     CONF_HEADER_VALUE: "",
     CONF_ECONTROL_URL: DEFAULT_ECONTROL_XLSX_URL,
+    CONF_ECONTROL_HEADER_NAME: "",
+    CONF_ECONTROL_HEADER_VALUE: "",
     CONF_ECONTROL_MONTH_COLUMN: DEFAULT_ECONTROL_MONTH_COLUMN,
     CONF_ECONTROL_VALUE_COLUMN: DEFAULT_ECONTROL_COLUMN,
     CONF_ECONTROL_BASE_COLUMN: DEFAULT_ECONTROL_BASE_COLUMN,
@@ -119,7 +143,14 @@ DEFAULT_OPTIONS: Final = {
     CONF_PRIOR_METHOD: DEFAULT_PRIOR_METHOD.value,
     CONF_AGGREGATION_SECONDS: DEFAULT_AGGREGATION_SECONDS,
     CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL_MINUTES,
+    CONF_SUNRISE_OFFSET: DEFAULT_SUNRISE_OFFSET_MINUTES,
+    CONF_SUNSET_OFFSET: DEFAULT_SUNSET_OFFSET_MINUTES,
+    CONF_OVERLAP: DEFAULT_OVERLAP_HOURS,
+    CONF_FULL_REFRESH_TIME: DEFAULT_FULL_REFRESH_TIME,
+    CONF_PRICE_TIME: DEFAULT_PRICE_TIME,
+    CONF_PRICE_RETRY: DEFAULT_PRICE_RETRY_MINUTES,
     CONF_OFFICIAL_INTERVAL: DEFAULT_OFFICIAL_INTERVAL_HOURS,
     CONF_OFFICIAL_EARLY_INTERVAL: DEFAULT_OFFICIAL_EARLY_INTERVAL_HOURS,
+    CONF_OFFICIAL_EARLY_DAYS: DEFAULT_OFFICIAL_EARLY_DAYS,
     CONF_REQUEST_DELAY: DEFAULT_REQUEST_DELAY_SECONDS,
 }

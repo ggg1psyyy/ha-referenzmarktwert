@@ -3,8 +3,10 @@
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 
-from .coordinator import ReferenzmarktwertCoordinator
+from .cache import STORAGE_VERSION
+from .coordinator import ReferenzmarktwertCoordinator, storage_key
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
@@ -24,3 +26,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ReferenzmarktwertConfigE
 async def async_unload_entry(hass: HomeAssistant, entry: ReferenzmarktwertConfigEntry) -> bool:
     """Unload a config entry (on removal, reload or options change)."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ReferenzmarktwertConfigEntry) -> None:
+    """The entry was deleted: delete its stored downloads too."""
+    await Store(hass, STORAGE_VERSION, storage_key(entry.entry_id)).async_remove()

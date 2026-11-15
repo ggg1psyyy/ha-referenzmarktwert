@@ -37,7 +37,7 @@ This integration is the single source of the price: consumers (e.g. a PV control
   XML) — no openpyxl. The first sheet is resolved via `workbook.xml` + relationships instead of assuming
   `sheet1.xml`; the unit is read from the header and converted to EUR/kWh (an unknown unit is an error, not a silent
   factor 100); oversized XML parts are refused, and any damage (bad zip, bad XML, bad indexes) is a
-  `SourceDataError`. The test fixture is the real file minus metadata (author names, printer settings, internal path).
+  `SourceDataError`. The test fixture is generated (see "Test data and licenses").
 
 `sources.py` design: parsing (pure, on plain data) is separate from fetching; fetching takes an
 `aiohttp.ClientSession` from the caller (in HA: the shared session), so it is tested against a local aiohttp test
@@ -107,10 +107,8 @@ tests/             # pytest, recorded responses as fixtures
 - **Estimate orchestration is pure** (`estimate.py`): the coordinator only fetches and caches. Only *complete* hours
   of generation are used (a partial latest hour would get an incomplete mean); prices are known until the last
   returned quarter-hour (Energy-Charts truncates future requests, no nulls).
-- **Request budget** (Energy-Charts rate-limits): sequential requests with a configurable pause; the reference month
-  (last year) is fetched once, the recomputed previous month once a day until E-Control publishes it, the official
-  file daily (every 3 h until the 10th while last month is awaited). A normal update = 2 requests. HTTP 429 →
-  `UpdateFailed(retry_after=…)`.
+- **Request budget**: see "Download schedule" below (replaced the first version, which re-downloaded the whole
+  month every hour).
 - **E-Control outage does not take the estimate down**: the last table is kept, logged once when it starts failing
   and once when it recovers; without any table the estimate uses the month so far and the official sensors are
   unknown.
@@ -130,8 +128,59 @@ tests/             # pytest, recorded responses as fixtures
 - Energy-Charts answers **HTTP 404 "no content available"** for a window without data (e.g. the first hours of a
   month): treated as an empty series; any other 404 (wrong path) stays an error. The setup validation therefore asks
   for windows that certainly hold data (generation 2 days ago, prices of the last day).
-- A failed E-Control download is retried on every update until it works (one failure at startup must not hide the
-  official values for a day).
+- A failed E-Control download is retried every daytime interval until it works (one failure at startup must not hide
+  the official values for a day).
+
+### Download schedule and stored data
+
+What is due when is decided by the pure `schedule.plan(now, tz, sun, settings, status)`, which also returns when the
+next thing becomes due; the coordinator sets its `update_interval` to that after every run (so it also wakes at night
+for prices, E-Control, the month change — and a long daytime interval cannot starve the 30-min price retry).
+
+- **Generation only in the daylight window** (sunrise + 60 min .. sunset + 180 min; offsets are options). PV
+  generation outside it is zero, or a few MW at dawn and dusk (Oct 2026: 128 quarter-hours of 4–8 MW, 0.045 % of the
+  month's energy) — they are not lost: every download starts at the **last stored point minus an overlap** (3 h),
+  so the morning's first download fetches them. In between, the estimate lacks them: measured for October 2026 at
+  the month end, 0.0015 ct/kWh (one measurement, not a bound).
+  Sunrise/sunset come from Home Assistant's home location (`helpers.sun`, computed locally); a window past midnight
+  (summer) is handled by also looking at yesterday's window; without sun times (polar) there is no gating.
+- **One full download per night** (02:00, option) of the running month — plus the previous month while it is not
+  official — as a safety net in case Energy-Charts revises older values (not observed yet; not verifiable from one
+  day's recordings).
+- **Prices once a day**: day-ahead results are published ~12:45–13:00 CET for the whole next day. Fetched when today's
+  are missing (at once), and from 13:30 (option) every 30 min until tomorrow's are there. Prices are stored by time
+  stamp across month ends, so the 1st's prices arrive with the last day's download (the first version capped requests
+  at the month end and would have had no prices for the 1st until 13:30).
+- **E-Control only if changed**: the server sends `Last-Modified` (no `ETag`) and answers `If-Modified-Since` with
+  `304` and no body (verified 2026-11-15). The conditional header is only sent while the parsed table for that date is
+  held (otherwise a restart would get a 304 and no table). Early checks run until day 15 (option): publication days
+  2022-01..2026-10 were 2–14 (mostly 2–9; day 14 once, Jan 2023; day 10 twice) — the first version's "until the
+  10th" would have missed Jan 2023. The file's Last-Modified (5 Nov 2026) can be a day after the publication date in
+  the sheet (4 Nov).
+- **Stored data** (`cache.py`, saved with `helpers.storage.Store` as `.storage/referenzmarktwert.<entry_id>`): the
+  generation and price series from the start of the previous month, the reference month, the official table with its
+  Last-Modified date, and when what was last tried. A restart or reload therefore costs no downloads, and the previous
+  month needs no extra download (it was the running month). A **fingerprint** of the data-source settings is stored
+  with it: after a *Reconfigure* to other sources the data is discarded. The file is deleted with the entry
+  (`async_remove_entry`). Diagnostics show counts, never sunrise/sunset-based times (they would reveal the location).
+- **Failures**: an Energy-Charts outage keeps the stored data and the sensors (logged once when it starts and once
+  when it recovers); only if nothing was ever downloaded is the update failed (setup is retried). HTTP 429 stores a
+  "not before" time from `Retry-After`; E-Control is not blocked by it. Without an official table (e.g. the download
+  failed before a restart) E-Control counts as failing and is retried every daytime interval.
+- The step of a series is taken from the data (`calc.resolution`), not assumed to be 15 min: with hourly prices the
+  coverage would otherwise look incomplete and the prices would be fetched every 30 min.
+- Energy-Charts has had `/v2/...` twins of every endpoint since 2026-07-20; v1 "remains unchanged", and neither
+  version can return a single production type — so `public_power` stays on v1 and always carries all types.
+
+### Test data and licenses
+
+- Energy-Charts API data is CC BY 4.0 with attribution to Energy-Charts.info (API description, "Data License"); the AT
+  day-ahead prices are CC BY 4.0 from Bundesnetzagentur | SMARD.de (stated in the `price` response's
+  `license_info`). The recorded responses in `tests/fixtures/` may therefore be shared, with attribution (README).
+- E-Control states no open license (only "© E-Control"). The repository therefore no longer contains E-Control's
+  file: `tools/make_econtrol_fixture.py` generates an xlsx with the same layout (title, shared-string headers, unit
+  row, Excel serial dates, source line) holding the published monthly values, reproducibly. Values match the original
+  to 5·10⁻¹² Cent/kWh. The earlier copy remains in the git history (not rewritten, by decision).
 
 ### Open points
 
@@ -198,3 +247,7 @@ better mid-month, worse early, not adopted.
   (pytest-homeassistant-custom-component, newest release pins HA 2026.10.4), which blocks sockets: the local test
   server uses `socket_enabled`, the live tests an `internet` fixture.
 - 2026-11-15 — Milestone 3: Home Assistant integration (flows, coordinator, sensors, diagnostics, brand icon).
+- 2026-11-15 — Download schedule: generation only in the daylight window and incremental (+ nightly full download),
+  prices once a day, E-Control only if changed (`If-Modified-Since`), downloads stored across restarts, new options
+  (window offsets, overlap, full-download time, price time and retry, early-check days, E-Control header); README
+  lists every request and the data licenses; the E-Control fixture is generated instead of copied.

@@ -3,7 +3,7 @@
 > **Status: early development — no release yet.**
 > The sensors work; the Energy Dashboard compensation statistic is not implemented yet.
 
-A custom [Home Assistant](https://www.home-assistant.io/) integration (to be installed via HACS) that computes the
+A custom [Home Assistant](https://www.home-assistant.io/) integration (installed through the Marketplace) that computes the
 Austrian **reference market value** (*Referenzmarktwert*, § 13 EAG) of the running month from public data, and values
 grid export with it for the Energy Dashboard. Many Austrian feed-in tariffs are defined as
 "Referenzmarktwert Photovoltaik − deduction".
@@ -62,13 +62,18 @@ All values in **EUR/kWh**.
 | Setup, **Configure** | Deduction | 0.015 EUR/kWh |
 | **Configure** | Estimate for the rest of the month | base price × last year's capture rate |
 | | Aggregation period | 3600 s (as E-Control) |
-| | Update interval (Energy-Charts) | 60 min |
-| | Official values: check interval / while awaited (until the 10th) | 24 h / 3 h |
-| | Pause between Energy-Charts requests | 1 s |
+| | Daytime interval (generation) | 60 min |
+| | Start after sunrise / end after sunset (daylight window) | 60 min / 180 min |
+| | Overlap (each download repeats the last hours) | 3 h |
+| | Nightly full download of the running month | 02:00 |
+| | Tomorrow's prices from / retry interval | 13:30 / 30 min |
+| | Official values: check interval / while awaited / awaited until day | 24 h / 3 h / 15 |
+| | Pause between requests | 1 s |
 | Setup section *Data sources*, **Reconfigure** | Energy-Charts API URL, generation and price paths | `https://api.energy-charts.info`, `/public_power`, `/price` |
 | | Country, bidding zone, generation type | `at`, `AT`, `Solar` |
 | | Extra HTTP header for Energy-Charts (name, value — e.g. an API key) | none |
-| | E-Control file URL; month, value, base price and publication date columns | E-Control's `Referenzmarktwert_Entwicklung.xlsx`; A, D, E, F |
+| | E-Control file URL; extra HTTP header for E-Control | E-Control's `Referenzmarktwert_Entwicklung.xlsx`; none |
+| | E-Control columns: month, value, base price, publication date | A, D, E, F |
 | | Time zone (months are counted in it), request timeout | Europe/Vienna, 30 s |
 
 ## Developed with Claude
@@ -83,6 +88,7 @@ documentation are written by Claude and reviewed by the maintainer. Commits are 
 | Calculation (`calc.py`): hourly aggregation, generation-weighted mean, month estimate (prior + blend), payout | done, tested |
 | Data sources (`sources.py`): Energy-Charts client, E-Control history file parser | done, tested |
 | HA integration: setup/reconfigure/options flows, coordinator, sensors, diagnostics | done, tested |
+| Download schedule (`schedule.py`: daylight window, daily prices, conditional E-Control check) and stored data (`cache.py`) | done, tested |
 | Energy Dashboard compensation statistic, backfill, services | not started |
 | Release, CI (hassfest, Marketplace/HACS validation, tests) | not started |
 
@@ -107,10 +113,6 @@ month's as its prices become known) × the PV/base ratio ("capture rate") of the
 Backtested on 2023–2026: about ±2 ct/kWh (RMSE) on the 1st of the month, ±1.7 on the 10th, ±1.1 on the 20th
 (`tools/backtest_estimate.py`). Alternative: the previous month's value as is.
 
-All parameters (aggregation period, deduction, prior method, data source URLs, country, bidding zone, generation type,
-time zone) have defaults in `custom_components/referenzmarktwert/const.py` and are passed in as parameters, so they can
-be made user-configurable.
-
 ## Development
 
 Requires Python ≥ 3.14.2 (the current Home Assistant minimum). With [uv](https://docs.astral.sh/uv/):
@@ -125,15 +127,41 @@ RMW_LIVE=1 .venv/bin/python -m pytest -m live    # optional: against the real AP
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for design decisions and their reasons.
 
-## Data sources and attribution
+## Downloads
 
-- **Energy-Charts** (Fraunhofer ISE), https://energy-charts.info — generation and day-ahead price data, licensed
-  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (price data originally from Bundesnetzagentur | SMARD.de).
-  `tests/fixtures/public_power_*.json` and `price_*.json` are recorded Energy-Charts responses.
-- **E-Control**, https://www.e-control.at/referenzmarktwert — official monthly reference market values.
-  `tests/fixtures/Referenzmarktwert_Entwicklung.xlsx` is a copy of E-Control's published history file.
+Everything is downloaded by your Home Assistant directly from the two sources; nothing is sent anywhere else. The
+requests carry only their parameters and Home Assistant's standard User-Agent (Home Assistant, aiohttp and Python
+versions), plus the optional extra headers you configure. Times below are local (Europe/Vienna), with the default
+settings. `start`/`end` are Unix seconds.
 
-This project is not affiliated with Fraunhofer ISE, E-Control or any electricity supplier.
+| What | Request | When |
+|---|---|---|
+| PV generation of the running month (Energy-Charts answers with every generation type; only `Solar` is used) | `https://api.energy-charts.info/public_power?country=at&start=…&end=…` | in the **daylight window** (sunrise + 1 h until sunset + 3 h, at Home Assistant's home location) every 60 min, only the hours since the last stored point (minus a 3 h overlap); once more after the window; **once a night** (02:00) the whole running month |
+| Day-ahead prices (EUR/MWh) | `https://api.energy-charts.info/price?bzn=AT&start=…&end=…` | **once a day** after the auction (from 13:30, again every 30 min until tomorrow's prices are there); at once if today's are missing |
+| PV generation of the same month last year (for the expected generation share) | `https://api.energy-charts.info/public_power?country=at&start=…&end=…` | once a month |
+| Official values | `https://www.e-control.at/documents/1785851/10823410/Referenzmarktwert_Entwicklung.xlsx` | checked daily, every 3 h until the 15th while last month's value is awaited; transferred **only if it changed** (`If-Modified-Since`; otherwise the server answers `304 Not Modified` without content) |
+
+Generation outside the daylight window is zero or nearly so (a few MW at dawn and dusk, about 0.05 % of a month's
+energy); the next download fetches those points too, so nothing is lost. Downloads are stored in Home Assistant's
+`.storage` folder, so a restart or reload costs no downloads; the previous month needs no extra download either (it was
+the running month). The connection test in setup and reconfigure makes three small requests: generation of one day,
+prices of one day, and the E-Control file. Per day: about 12–15 small Energy-Charts requests in November, over 20 around June (longer daylight), and one
+E-Control check.
+
+## Data sources and licenses
+
+- **Energy-Charts** ([Fraunhofer ISE](https://energy-charts.info), [API](https://api.energy-charts.info/)) — PV
+  generation and day-ahead prices. The API data is licensed under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) with attribution to Energy-Charts.info
+  ([publishing notes](https://energy-charts.info/publishing-notes.html)); the day-ahead prices for AT are CC BY 4.0 from
+  [Bundesnetzagentur | SMARD.de](https://www.smard.de/), published unchanged. `tests/fixtures/public_power_*.json` and
+  `price_*.json` are recorded Energy-Charts responses (reduced to the `Solar` series), shared under the same license.
+- **E-Control** ([Referenzmarktwert](https://www.e-control.at/referenzmarktwert)) — the official monthly reference
+  market values, © E-Control. The integration downloads E-Control's published file at runtime; this repository does not
+  contain it. `tests/fixtures/Referenzmarktwert_Entwicklung.xlsx` is generated by `tools/make_econtrol_fixture.py` and
+  holds the published monthly values (source: E-Control) in the same layout, for the tests.
+
+This project is not affiliated with Fraunhofer ISE, E-Control, Bundesnetzagentur or any electricity supplier.
 
 ## License
 

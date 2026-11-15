@@ -25,6 +25,7 @@ from homeassistant.helpers.selector import (
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
+    TimeSelector,
 )
 from homeassistant.util import dt as dt_util
 
@@ -35,20 +36,29 @@ from .const import (
     CONF_COUNTRY,
     CONF_DEDUCTION,
     CONF_ECONTROL_BASE_COLUMN,
+    CONF_ECONTROL_HEADER_NAME,
+    CONF_ECONTROL_HEADER_VALUE,
     CONF_ECONTROL_MONTH_COLUMN,
     CONF_ECONTROL_PUBLISHED_COLUMN,
     CONF_ECONTROL_URL,
     CONF_ECONTROL_VALUE_COLUMN,
     CONF_ENERGY_CHARTS_URL,
+    CONF_FULL_REFRESH_TIME,
     CONF_GENERATION_PATH,
     CONF_HEADER_NAME,
     CONF_HEADER_VALUE,
+    CONF_OFFICIAL_EARLY_DAYS,
     CONF_OFFICIAL_EARLY_INTERVAL,
     CONF_OFFICIAL_INTERVAL,
+    CONF_OVERLAP,
     CONF_PRICE_PATH,
+    CONF_PRICE_RETRY,
+    CONF_PRICE_TIME,
     CONF_PRIOR_METHOD,
     CONF_PRODUCTION_TYPE,
     CONF_REQUEST_DELAY,
+    CONF_SUNRISE_OFFSET,
+    CONF_SUNSET_OFFSET,
     CONF_TIME_ZONE,
     CONF_TIMEOUT,
     CONF_UPDATE_INTERVAL,
@@ -75,9 +85,10 @@ _SECRET = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 
 
 def _number(minimum: float, maximum: float, step: float | Literal["any"], unit: str | None = None) -> NumberSelector:
-    return NumberSelector(
-        NumberSelectorConfig(min=minimum, max=maximum, step=step, unit_of_measurement=unit, mode=NumberSelectorMode.BOX)
-    )
+    config = NumberSelectorConfig(min=minimum, max=maximum, step=step, mode=NumberSelectorMode.BOX)
+    if unit is not None:
+        config["unit_of_measurement"] = unit
+    return NumberSelector(config)
 
 
 def sources_schema(values: Mapping[str, Any]) -> probatio.Schema:
@@ -99,6 +110,8 @@ def sources_schema(values: Mapping[str, Any]) -> probatio.Schema:
                 field(CONF_HEADER_NAME, _TEXT, required=False),
                 field(CONF_HEADER_VALUE, _SECRET, required=False),
                 field(CONF_ECONTROL_URL, _URL),
+                field(CONF_ECONTROL_HEADER_NAME, _TEXT, required=False),
+                field(CONF_ECONTROL_HEADER_VALUE, _SECRET, required=False),
                 field(CONF_ECONTROL_MONTH_COLUMN, _TEXT),
                 field(CONF_ECONTROL_VALUE_COLUMN, _TEXT),
                 field(CONF_ECONTROL_BASE_COLUMN, _TEXT, required=False),
@@ -112,6 +125,10 @@ def sources_schema(values: Mapping[str, Any]) -> probatio.Schema:
 
 def _deduction_field(value: float) -> dict[probatio.Marker, Any]:
     return {probatio.Required(CONF_DEDUCTION, default=value): _number(-1, 1, "any", "EUR/kWh")}
+
+
+def _option(current: Mapping[str, Any], key: str, selector: Any) -> dict[probatio.Marker, Any]:
+    return {probatio.Required(key, default=current[key]): selector}
 
 
 def unique_id(data: Mapping[str, Any]) -> str:
@@ -133,7 +150,14 @@ def title(data: Mapping[str, Any]) -> str:
 def _clean(data: Mapping[str, Any]) -> dict[str, Any]:
     """Strip text fields; optional fields left empty become ""."""
     cleaned = {key: (value.strip() if isinstance(value, str) else value) for key, value in data.items()}
-    for key in (CONF_HEADER_NAME, CONF_HEADER_VALUE, CONF_ECONTROL_BASE_COLUMN, CONF_ECONTROL_PUBLISHED_COLUMN):
+    for key in (
+        CONF_HEADER_NAME,
+        CONF_HEADER_VALUE,
+        CONF_ECONTROL_HEADER_NAME,
+        CONF_ECONTROL_HEADER_VALUE,
+        CONF_ECONTROL_BASE_COLUMN,
+        CONF_ECONTROL_PUBLISHED_COLUMN,
+    ):
         cleaned.setdefault(key, "")
     return cleaned
 
@@ -246,16 +270,17 @@ class ReferenzmarktwertOptionsFlow(OptionsFlowWithReload):
                 probatio.Required(CONF_AGGREGATION_SECONDS, default=current[CONF_AGGREGATION_SECONDS]): probatio.All(
                     _number(900, 3600, 900, "s"), probatio.Coerce(int)
                 ),
-                probatio.Required(CONF_UPDATE_INTERVAL, default=current[CONF_UPDATE_INTERVAL]): _number(
-                    15, 1440, 1, "min"
-                ),
-                probatio.Required(CONF_OFFICIAL_INTERVAL, default=current[CONF_OFFICIAL_INTERVAL]): _number(
-                    1, 168, 1, "h"
-                ),
-                probatio.Required(CONF_OFFICIAL_EARLY_INTERVAL, default=current[CONF_OFFICIAL_EARLY_INTERVAL]): _number(
-                    1, 24, 1, "h"
-                ),
-                probatio.Required(CONF_REQUEST_DELAY, default=current[CONF_REQUEST_DELAY]): _number(0, 30, 0.5, "s"),
+                **_option(current, CONF_UPDATE_INTERVAL, _number(15, 1440, 1, "min")),
+                **_option(current, CONF_SUNRISE_OFFSET, _number(-180, 360, 1, "min")),
+                **_option(current, CONF_SUNSET_OFFSET, _number(-180, 720, 1, "min")),
+                **_option(current, CONF_OVERLAP, _number(0, 48, 1, "h")),
+                **_option(current, CONF_FULL_REFRESH_TIME, TimeSelector()),
+                **_option(current, CONF_PRICE_TIME, TimeSelector()),
+                **_option(current, CONF_PRICE_RETRY, _number(5, 1440, 1, "min")),
+                **_option(current, CONF_OFFICIAL_INTERVAL, _number(1, 168, 1, "h")),
+                **_option(current, CONF_OFFICIAL_EARLY_INTERVAL, _number(1, 24, 1, "h")),
+                **_option(current, CONF_OFFICIAL_EARLY_DAYS, probatio.All(_number(1, 31, 1), probatio.Coerce(int))),
+                **_option(current, CONF_REQUEST_DELAY, _number(0, 30, 0.5, "s")),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
