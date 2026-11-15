@@ -43,6 +43,8 @@ from .const import (
     CONF_ECONTROL_VALUE_COLUMN,
     CONF_END_OFFSET,
     CONF_ENERGY_CHARTS_URL,
+    CONF_ERROR_AT_END,
+    CONF_ERROR_AT_START,
     CONF_FULL_REFRESH_TIME,
     CONF_GENERATION_PATH,
     CONF_HEADER_NAME,
@@ -278,6 +280,8 @@ class ReferenzmarktwertOptionsFlow(OptionsFlowWithReload):
                 probatio.Required(CONF_AGGREGATION_SECONDS, default=current[CONF_AGGREGATION_SECONDS]): probatio.All(
                     _number_selector(900, 3600, 900, "s"), probatio.Coerce(int)
                 ),
+                **_option(current, CONF_ERROR_AT_START, _number_selector(0, 0.5, "any", "EUR/kWh")),
+                **_option(current, CONF_ERROR_AT_END, _number_selector(0, 0.5, "any", "EUR/kWh")),
                 **_option(current, CONF_UPDATE_INTERVAL, _number_selector(15, 1440, 1, "min")),
                 **_option(current, CONF_START_OFFSET, _number_selector(-180, 360, 1, "min")),
                 **_option(current, CONF_END_OFFSET, _number_selector(-180, 720, 1, "min")),

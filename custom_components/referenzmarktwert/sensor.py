@@ -43,10 +43,18 @@ class ReferenzmarktwertSensorDescription(SensorEntityDescription):
     attributes_fn: Callable[[ReferenzmarktwertData], dict[str, Any]] = lambda _: {}
 
 
+def _band(value: float | None, error: float | None) -> dict[str, Any]:
+    """The estimate +- its expected error (about 3 of 4 past months ended inside)."""
+    if value is None or error is None:
+        return {"expected_error": None, "low": None, "high": None}
+    return {"expected_error": error, "low": value - error, "high": value + error}
+
+
 def _estimate_attributes(data: ReferenzmarktwertData) -> dict[str, Any]:
     e = data.estimate
     return {
         "month": month_text(e.month),
+        **_band(e.value, e.expected_error),
         "month_so_far": e.month_so_far,
         "known_share": round(e.known_share, 4) if e.known_share is not None else None,
         "prior": e.prior,
@@ -92,7 +100,17 @@ SENSORS: tuple[ReferenzmarktwertSensorDescription, ...] = (
         key="payout_estimate",
         translation_key="payout_estimate",
         value_fn=lambda d: _payout(d.estimate.value, d),
-        attributes_fn=lambda d: {"month": month_text(d.estimate.month), "deduction": d.deduction},
+        attributes_fn=lambda d: {
+            "month": month_text(d.estimate.month),
+            "deduction": d.deduction,
+            **_band(_payout(d.estimate.value, d), d.estimate.expected_error),
+        },
+    ),
+    ReferenzmarktwertSensorDescription(
+        key="expected_error",
+        translation_key="expected_error",
+        value_fn=lambda d: d.estimate.expected_error,
+        attributes_fn=lambda d: {"month": month_text(d.estimate.month)},
     ),
     ReferenzmarktwertSensorDescription(
         key="official",

@@ -186,3 +186,11 @@ def test_covered_until_uses_the_series_step() -> None:
 
 def test_clamp01() -> None:
     assert [calc.clamp01(x) for x in (-0.5, 0.25, 7.0)] == [0.0, 0.25, 1.0]
+
+
+def test_expected_error_shrinks_with_the_known_share() -> None:
+    assert calc.expected_error(0.0, 0.0225, 0.0025) == pytest.approx(0.025)
+    assert calc.expected_error(0.5, 0.0225, 0.0025) == pytest.approx(0.01375)
+    assert calc.expected_error(1.0, 0.0225, 0.0025) == pytest.approx(0.0025)
+    assert calc.expected_error(None, 0.0225, 0.0025) == pytest.approx(0.025)  # unknown: nothing known
+    assert calc.expected_error(1.3, 0.0225, 0.0025) == pytest.approx(0.0025)  # clamped

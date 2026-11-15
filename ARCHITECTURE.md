@@ -302,3 +302,17 @@ better mid-month, worse early, not adopted.
   spread). Error below 0.10 ct/kWh only from day 26–31; mid-month up to 4 ct/kWh in winter (Dec 2023, Feb 2026),
   the prior for the unknown rest of the month dominates. Summary table in the README; the test was a one-off
   (not committed).
+- 2026-11-15 — Expected error of the estimate (attributes `expected_error`/`low`/`high`, own sensor). Error analysis
+  on 2023-02..2026-10 (oracle substitutions, RMSE ct/kWh on day 1/10/20): current 2.17/1.69/1.10; true rest-of-month
+  price level 1.34/0.96/0.63; true capture rate 1.40/1.14/0.76; true share 2.15/1.68/1.10 — the level and the
+  capture rate cause the error about equally, the weighting hardly matters. There is drift (capture rate fell year
+  on year 2023–2025, up to −33 % in April, rose in 2026; level falls Feb–May, rises Jun–Nov), but no correction
+  from existing data helped walk-forward: carrying the capture-rate trend forward 2.49/1.85/1.16, seasonal level
+  factor 3.34/2.19/1.17, trailing 14 d level 2.50/1.70/1.01, 21 d 2.38/1.79/1.07 (each better in about half the
+  months, worse in the rest — 2023 against crisis year 2022, 2026's capture-rate jump). The remaining error is price
+  surprise; the lever would be month futures (EEX Phelix-AT base month, ATBM), but no free source with a usable
+  license was found (EEX website data: personal non-commercial use only, automated/machine use excluded; EEX
+  DataSource paid, from ~60 EUR/month). Error models compared, each year left out in turn (share of errors within
+  ±1/±2 sigma, Gaussian score): RMSE-per-day table 74/92 %, 0.73; 2.25 ct × (1 − share) + 0.25 ct 74/93 %, 0.79;
+  proportional to the prior ~85/94 % but far too wide (score 0.96–1.34). Chosen: the two-parameter form (as good
+  as the table, smooth, works for any month length, two options instead of 31 numbers).

@@ -79,6 +79,12 @@ def test_day_ten_blends_prior_and_month_so_far(official: dict) -> None:
     # Cross-checked with tools/backtest_estimate.py's code path: 13.98 ct. October 2026 is a hard month
     # (official 17.71, +7.2 ct on September): its first ten days were cheap, prices rose later.
     assert result.value == pytest.approx(0.13981, abs=0.00001)
+    # expected error: 2.25 ct x the unknown share + 0.25 ct; the real error that day was -3.7 ct (a hard month)
+    assert result.expected_error == pytest.approx(0.0225 * (1 - result.known_share) + 0.0025)
+    custom = estimate_month(
+        now, VIENNA, data, load("2025-10", False), values, bases, error_at_start=0.05, error_at_end=0
+    )
+    assert custom.expected_error == pytest.approx(0.05 * (1 - result.known_share))
 
 
 def test_partial_hour_is_not_used(official: dict) -> None:
@@ -104,6 +110,7 @@ def test_missing_data_degrades_gracefully(official: dict) -> None:
     now = OCT_START + 3600  # first hour of the month: nothing known yet
     result = estimate_month(now, VIENNA, MonthData([], []), None, {}, {})
     assert result.value is None and result.month_so_far is None
+    assert result.expected_error is None  # no estimate, no error
     assert result.previous_source is PreviousSource.MISSING
     # no reference (last year's data failed): the month so far is used as is
     now = OCT_START + 10 * 86400
@@ -111,3 +118,4 @@ def test_missing_data_degrades_gracefully(official: dict) -> None:
     result = estimate_month(now, VIENNA, cut(load("2026-10"), now, now), None, values, bases)
     assert result.known_share is None
     assert result.value == result.month_so_far
+    assert result.expected_error == pytest.approx(0.0225 + 0.0025)  # unknown share: as if nothing were known

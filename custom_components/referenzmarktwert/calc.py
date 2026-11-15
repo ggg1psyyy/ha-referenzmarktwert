@@ -228,6 +228,16 @@ def blend(month_so_far: float | None, previous: float | None, known_share: float
     return share * month_so_far + (1 - share) * previous
 
 
+def expected_error(known_share: float | None, at_start: float, at_end: float) -> float:
+    """Expected error (one standard deviation) of the whole-month estimate.
+
+    It shrinks with the share of the month's PV energy already known: `at_start` before anything is
+    known, `at_end` when everything is (what remains: E-Control's own computation differs slightly
+    from the data). An unknown share counts as nothing known.
+    """
+    return at_start * (1 - clamp01(known_share or 0.0)) + at_end
+
+
 def payout(value: float, deduction: float) -> float:
     """Feed-in price = market value - deduction (same unit for both, normally EUR/kWh)."""
     return value - deduction

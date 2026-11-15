@@ -41,6 +41,8 @@ from .const import (
     CONF_ECONTROL_VALUE_COLUMN,
     CONF_END_OFFSET,
     CONF_ENERGY_CHARTS_URL,
+    CONF_ERROR_AT_END,
+    CONF_ERROR_AT_START,
     CONF_FULL_REFRESH_TIME,
     CONF_GENERATION_PATH,
     CONF_HEADER_NAME,
@@ -287,6 +289,8 @@ class ReferenzmarktwertCoordinator(DataUpdateCoordinator[ReferenzmarktwertData])
             recomputed,
             self._method,
             self._period,
+            float(self._options[CONF_ERROR_AT_START]),
+            float(self._options[CONF_ERROR_AT_END]),
         )
         return ReferenzmarktwertData(
             estimate=estimate,

@@ -13,6 +13,7 @@ from custom_components.referenzmarktwert.config_flow import SECTION_SOURCES
 from custom_components.referenzmarktwert.const import (
     CONF_BIDDING_ZONE,
     CONF_DEDUCTION,
+    CONF_ERROR_AT_START,
     CONF_PRIOR_METHOD,
     CONF_PRODUCTION_TYPE,
     CONF_REQUEST_DELAY,
@@ -198,12 +199,19 @@ async def test_options_flow(hass: HomeAssistant, config_entry: MockConfigEntry) 
     config_entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(config_entry.entry_id)
     assert result["type"] is FlowResultType.FORM
-    new = {**DEFAULT_OPTIONS, CONF_DEDUCTION: 0.016, CONF_PRIOR_METHOD: "previous_month", CONF_REQUEST_DELAY: 2}
+    new = {
+        **DEFAULT_OPTIONS,
+        CONF_DEDUCTION: 0.016,
+        CONF_PRIOR_METHOD: "previous_month",
+        CONF_REQUEST_DELAY: 2,
+        CONF_ERROR_AT_START: 0.03,
+    }
     with patch(SETUP, return_value=True):
         result = await hass.config_entries.options.async_configure(result["flow_id"], new)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert config_entry.options[CONF_DEDUCTION] == 0.016
     assert config_entry.options[CONF_PRIOR_METHOD] == "previous_month"
+    assert config_entry.options[CONF_ERROR_AT_START] == 0.03
 
 
 async def test_forms_serialize_for_the_frontend(hass: HomeAssistant, config_entry: MockConfigEntry) -> None:

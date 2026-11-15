@@ -50,8 +50,9 @@ All values in **EUR/kWh**.
 
 | Sensor | Value | Main attributes |
 |---|---|---|
-| Estimate running month | expected reference market value of the running month | `month`, `month_so_far`, `known_share`, `prior`, `previous_month` (+ `_source`: official/recomputed), `generation_until`, `prices_until`, `method` |
-| Payout estimate running month | estimate − deduction (the expected feed-in price) | `month`, `deduction` |
+| Estimate running month | expected reference market value of the running month | `month`, `expected_error`, `low`/`high` (estimate ∓ expected error), `month_so_far`, `known_share`, `prior`, `previous_month` (+ `_source`: official/recomputed), `generation_until`, `prices_until`, `method` |
+| Payout estimate running month | estimate − deduction (the expected feed-in price) | `month`, `deduction`, `expected_error`, `low`/`high` |
+| Expected error of the estimate | how far off the estimate can be (one standard deviation, see below) | `month` |
 | Official value | latest value published by E-Control | `month`, `published`, `base_price`, `checked`, `history` (all months; not stored in the database) |
 | Payout official value | official value − deduction | `month`, `deduction` |
 
@@ -62,6 +63,7 @@ All values in **EUR/kWh**.
 | Setup, **Configure** | Deduction | 0.015 EUR/kWh |
 | **Configure** | Estimate for the rest of the month | base price × last year's capture rate |
 | | Aggregation period | 3600 s (as E-Control) |
+| | Expected error at the start / end of the month | 0.0225 / 0.0025 EUR/kWh |
 | | Interval while PV produces (generation) | 60 min |
 | | Start after the first / end after the last generation (production window, from yesterday's data) | 120 min / 150 min |
 | | Overlap (each download repeats the last hours) | 3 h |
@@ -130,6 +132,12 @@ the day: mean of the absolute errors (largest in brackets).
 
 On the last day the error is only the difference between Energy-Charts' data and E-Control's own computation
 (at most 0.14 ct/kWh); in three months (2024-05, 2026-02, 2026-04) it stays just above 0.10 for that reason.
+
+**Expected error.** The estimate comes with how far off it can be: 2.25 ct/kWh × (1 − `known_share`) + 0.25 ct/kWh
+(both values are options), shown as `expected_error` with `low`/`high` and as its own sensor. Fitted on all days of
+2023-02..2026-10, each year left out in turn: 74 % of the real errors were within ± the expected error, 93 % within
+twice it (days 1–10: 71 %, 11–20: 72 %, 21–31: 79 %). It is the typical error, not a limit: in a month whose prices
+move unusually (December 2023, February 2026) the estimate can be off by twice as much for weeks.
 
 ## Development
 

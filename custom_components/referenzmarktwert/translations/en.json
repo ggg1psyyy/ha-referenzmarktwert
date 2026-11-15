@@ -125,7 +125,9 @@
           "official_early_interval_hours": "Official values: check interval while awaited",
           "official_early_days": "Official values: awaited until day",
           "request_delay_seconds": "Pause between requests",
-          "spread_minutes": "Random spread of the download times"
+          "spread_minutes": "Random spread of the download times",
+          "expected_error_at_start": "Expected error at the start of the month",
+          "expected_error_at_end": "Expected error at the end of the month"
         },
         "data_description": {
           "deduction": "Subtracted from the market value for the payout sensors (Hofer Sonne: 0.015 EUR/kWh).",
@@ -142,7 +144,9 @@
           "official_early_interval_hours": "Used at the start of the month while last month's value is not published yet.",
           "official_early_days": "Until this day of the month the shorter interval is used (published so far: day 2-14).",
           "request_delay_seconds": "Energy-Charts limits how often it may be asked.",
-          "spread_minutes": "The planned download times (start and end of the production window, nightly full download, prices after the auction, last year's month after a month change) move by a random amount within this range, new every day, so that not all installations ask Energy-Charts at the same second. 0: off."
+          "spread_minutes": "The planned download times (start and end of the production window, nightly full download, prices after the auction, last year's month after a month change) move by a random amount within this range, new every day, so that not all installations ask Energy-Charts at the same second. 0: off.",
+          "expected_error_at_start": "Expected error (one standard deviation) of the estimate before any of the month is known. It shrinks with the known share of the month's PV energy. Default from 45 months of history: about 3 of 4 months ended within the estimate ± this error.",
+          "expected_error_at_end": "What remains when the whole month is known: E-Control's own computation differs slightly from the data."
         }
       }
     }
@@ -168,6 +172,9 @@
       },
       "payout_official": {
         "name": "Payout official value"
+      },
+      "expected_error": {
+        "name": "Expected error of the estimate"
       }
     }
   },

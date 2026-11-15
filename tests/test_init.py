@@ -16,6 +16,8 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 from custom_components.referenzmarktwert import calc
 from custom_components.referenzmarktwert.cache import STORAGE_VERSION
 from custom_components.referenzmarktwert.const import (
+    CONF_ERROR_AT_END,
+    CONF_ERROR_AT_START,
     CONF_REQUEST_DELAY,
     DEFAULT_ECONTROL_XLSX_URL,
     DEFAULT_ENERGY_CHARTS_BASE_URL,
@@ -83,8 +85,18 @@ async def test_setup_creates_sensors(hass: HomeAssistant, config_entry: MockConf
     assert estimate.attributes["previous_month_source"] == "official"
     assert estimate.attributes["known_share"] == 1.0  # reference month (October 2025) was used
 
+    assert estimate.attributes["expected_error"] == pytest.approx(0.0025)  # whole month known: only the rest
+    assert estimate.attributes["low"] == pytest.approx(float(estimate.state) - 0.0025, abs=1e-6)
+    assert estimate.attributes["high"] == pytest.approx(float(estimate.state) + 0.0025, abs=1e-6)
+
     payout = hass.states.get("sensor.referenzmarktwert_pv_payout_estimate_running_month")
     assert float(payout.state) == pytest.approx(0.1771 - 0.015, abs=0.0001)
+    assert payout.attributes["high"] - payout.attributes["low"] == pytest.approx(2 * 0.0025)  # same width
+    assert payout.attributes["low"] == pytest.approx(estimate.attributes["low"] - 0.015)
+
+    error = hass.states.get("sensor.referenzmarktwert_pv_expected_error_of_the_estimate")
+    assert float(error.state) == pytest.approx(0.0025)
+    assert error.attributes["unit_of_measurement"] == "EUR/kWh"
 
     official = hass.states.get("sensor.referenzmarktwert_pv_official_value")
     assert float(official.state) == pytest.approx(0.1771)
@@ -97,6 +109,19 @@ async def test_setup_creates_sensors(hass: HomeAssistant, config_entry: MockConf
     assert registry.async_get("sensor.referenzmarktwert_pv_estimate_running_month").unique_id == (
         f"{config_entry.entry_id}_estimate"
     )
+
+
+@pytest.mark.freeze_time(NOW)
+async def test_expected_error_options(hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Referenzmarktwert PV",
+        data=dict(config_entry.data),
+        options={**config_entry.options, CONF_ERROR_AT_START: 0.04, CONF_ERROR_AT_END: 0.01},
+    )
+    await setup(hass, entry)
+    error = hass.states.get("sensor.referenzmarktwert_pv_expected_error_of_the_estimate")
+    assert float(error.state) == pytest.approx(0.01)  # the whole month is known: only the end value
 
 
 @pytest.mark.freeze_time("2026-10-15T09:00:00+00:00")  # 11:00 in Vienna, daylight

@@ -12,7 +12,14 @@ from enum import StrEnum
 
 from . import calc
 from .calc import Month, Series
-from .const import DEFAULT_AGGREGATION_SECONDS, DEFAULT_PRIOR_METHOD, KWH_PER_MWH, PriorMethod
+from .const import (
+    DEFAULT_AGGREGATION_SECONDS,
+    DEFAULT_ERROR_AT_END_EUR_PER_KWH,
+    DEFAULT_ERROR_AT_START_EUR_PER_KWH,
+    DEFAULT_PRIOR_METHOD,
+    KWH_PER_MWH,
+    PriorMethod,
+)
 
 
 class PreviousSource(StrEnum):
@@ -37,6 +44,7 @@ class Estimate:
 
     month: Month
     value: float | None  # whole-month estimate
+    expected_error: float | None  # one standard deviation of `value` (see calc.expected_error)
     month_so_far: float | None  # generation-weighted value of the complete hours so far
     known_share: float | None  # expected share of the month's generation already known (0..1)
     prior: float | None  # estimate for the rest of the month
@@ -71,6 +79,8 @@ def estimate_month(
     previous_recomputed: tuple[float | None, float | None] | None = None,
     method: PriorMethod = DEFAULT_PRIOR_METHOD,
     period: int = DEFAULT_AGGREGATION_SECONDS,
+    error_at_start: float = DEFAULT_ERROR_AT_START_EUR_PER_KWH,
+    error_at_end: float = DEFAULT_ERROR_AT_END_EUR_PER_KWH,
 ) -> Estimate:
     """Estimate the month containing `now`.
 
@@ -123,9 +133,11 @@ def estimate_month(
 
     prior = calc.prior(month, pv, base, method, running_base, weight)
     so_far_value = so_far.eur_per_kwh if so_far else None
+    value = calc.blend(so_far_value, prior, known_share)
     return Estimate(
         month=month,
-        value=calc.blend(so_far_value, prior, known_share),
+        value=value,
+        expected_error=calc.expected_error(known_share, error_at_start, error_at_end) if value is not None else None,
         month_so_far=so_far_value,
         known_share=known_share,
         prior=prior,
