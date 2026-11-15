@@ -18,7 +18,6 @@ DEFAULT_AGGREGATION_SECONDS: Final = 3600
 DEFAULT_DEDUCTION_EUR_PER_KWH: Final = 0.015
 
 
-
 class PriorMethod(StrEnum):
     """How the not-yet-known rest of the month is estimated (the "prior" of the blend).
 
@@ -41,13 +40,20 @@ DEFAULT_ENERGY_CHARTS_BASE_URL: Final = "https://api.energy-charts.info"
 DEFAULT_COUNTRY: Final = "at"
 DEFAULT_BIDDING_ZONE: Final = "AT"
 DEFAULT_PRODUCTION_TYPE: Final = "Solar"
+DEFAULT_ENERGY_CHARTS_GENERATION_PATH: Final = "/public_power"
+DEFAULT_ENERGY_CHARTS_PRICE_PATH: Final = "/price"
 
 # --- E-Control official values ------------------------------------------------------------------
 DEFAULT_ECONTROL_XLSX_URL: Final = (
     "https://www.e-control.at/documents/1785851/10823410/Referenzmarktwert_Entwicklung.xlsx"
 )
+DEFAULT_ECONTROL_MONTH_COLUMN: Final = "A"  # month as Excel date
 DEFAULT_ECONTROL_COLUMN: Final = "D"  # B hydro, C wind, D photovoltaics
 DEFAULT_ECONTROL_BASE_COLUMN: Final = "E"  # Referenzmarktpreis (day-ahead base), for the capture rate
+DEFAULT_ECONTROL_PUBLISHED_COLUMN: Final = "F"  # publication date as Excel date
+
+# --- HTTP --------------------------------------------------------------------------------------
+DEFAULT_REQUEST_TIMEOUT_SECONDS: Final = 30.0
 
 # --- Time --------------------------------------------------------------------------------------
 DEFAULT_TIME_ZONE: Final = "Europe/Vienna"  # months are assigned in this zone

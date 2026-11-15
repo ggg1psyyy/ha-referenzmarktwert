@@ -6,8 +6,18 @@ description = "Home Assistant integration: Austrian reference market value (Refe
 requires-python = ">=3.14.2"
 
 [dependency-groups]
-dev = ["pytest"]
+dev = ["pytest", "pytest-asyncio", "aiohttp", "ruff"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["live: talks to the real APIs (opt-in: RMW_LIVE=1)"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]

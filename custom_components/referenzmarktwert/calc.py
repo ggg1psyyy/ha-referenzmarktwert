@@ -105,9 +105,7 @@ def market_value(
     )
 
 
-def elapsed_share(
-    reference: Mapping[int, float], reference_start: int, elapsed: int
-) -> float | None:
+def elapsed_share(reference: Mapping[int, float], reference_start: int, elapsed: int) -> float | None:
     """Share (0..1) of a reference month's energy produced in its first `elapsed` seconds.
 
     `reference` is an aggregated generation series of a comparable month (e.g. the same month last
@@ -154,9 +152,7 @@ def prior(
     return fallback
 
 
-def blend(
-    month_so_far: float | None, previous: float | None, known_share: float | None
-) -> float | None:
+def blend(month_so_far: float | None, previous: float | None, known_share: float | None) -> float | None:
     """Whole-month estimate: month so far, weighted by the expected PV share already known,
     the rest filled with the previous month's value. Any input may be missing; with an unknown
     share the month so far is used as is (never silently discard real data)."""

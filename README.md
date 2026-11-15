@@ -45,7 +45,7 @@ documentation are written by Claude and reviewed by the maintainer. Commits are 
 | Part | State |
 |---|---|
 | Calculation (`calc.py`): hourly aggregation, generation-weighted mean, month estimate (prior + blend), payout | done, tested |
-| Data sources (Energy-Charts client, E-Control history file) | not started |
+| Data sources (`sources.py`): Energy-Charts client, E-Control history file parser | done, tested |
 | HA integration: config flow, coordinator, sensors | not started |
 | Energy Dashboard compensation statistic, backfill, services | not started |
 | HACS release, CI | not started |
@@ -80,8 +80,10 @@ Requires Python ≥ 3.14.2 (the current Home Assistant minimum). With [uv](https
 
 ```bash
 uv venv --python 3.14 .venv
-uv pip install --python .venv pytest
-.venv/bin/python -m pytest
+uv pip install --python .venv pytest pytest-asyncio aiohttp ruff
+.venv/bin/python -m pytest                       # offline tests (recorded data, local test server)
+RMW_LIVE=1 .venv/bin/python -m pytest -m live    # optional: against the real APIs
+.venv/bin/ruff check . && .venv/bin/ruff format --check .
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for design decisions and their reasons.
@@ -92,7 +94,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for design decisions and their reasons.
   [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (price data originally from Bundesnetzagentur | SMARD.de).
   `tests/fixtures/public_power_*.json` and `price_*.json` are recorded Energy-Charts responses.
 - **E-Control**, https://www.e-control.at/referenzmarktwert — official monthly reference market values.
-  `tests/fixtures/econtrol_monthly.json` is an extract of E-Control's published history (PV and base price).
+  `tests/fixtures/Referenzmarktwert_Entwicklung.xlsx` is a copy of E-Control's published history file.
 
 This project is not affiliated with Fraunhofer ISE, E-Control or any electricity supplier.
 

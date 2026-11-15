@@ -29,8 +29,21 @@ This integration is the single source of the price: consumers (e.g. a PV control
 - **Energy-Charts** (no API key, CC BY 4.0): `public_power?country=at` (15-min generation, `name == "Solar"`) and
   `price?bzn=AT` (15-min EUR/MWh). The `end` parameter is **inclusive**, so a month request also returns the first
   point of the next month — the calculation uses a half-open `[start, end)` window. Generation lags real time by ~2 h.
+  Plain Unix seconds are accepted for `start`/`end` (no URL-encoding of `+02:00` offsets needed). The API
+  **rate-limits**: an HTTP 429 was observed during a few quick requests in a row → `SourceRateLimitError` carries
+  `Retry-After`; the coordinator must poll sparingly and back off.
 - **E-Control** history file `Referenzmarktwert_Entwicklung.xlsx` (monthly since 2022-01; columns: month, hydro,
-  wind, PV, base price, publication date). Parsed with the standard library (it is a zip of XML) — no openpyxl.
+  wind, PV, base price, publication date; a unit row "Cent/kWh"). Parsed with the standard library (it is a zip of
+  XML) — no openpyxl. The first sheet is resolved via `workbook.xml` + relationships instead of assuming
+  `sheet1.xml`; the unit is read from the header and converted to EUR/kWh (an unknown unit is an error, not a silent
+  factor 100); oversized XML parts are refused, and any damage (bad zip, bad XML, bad indexes) is a
+  `SourceDataError`. The test fixture is the real file minus metadata (author names, printer settings, internal path).
+
+`sources.py` design: parsing (pure, on plain data) is separate from fetching; fetching takes an
+`aiohttp.ClientSession` from the caller (in HA: the shared session), so it is tested against a local aiohttp test
+server. All failures become `SourceError` subclasses (`SourceConnectionError`, `SourceRateLimitError`,
+`SourceDataError`). URLs, paths, country, bidding zone, production type, columns, extra headers (e.g. an API key) and
+the timeout are fields of `EnergyChartsConfig` / `EControlConfig`.
 
 Recomputation check against official values: Sep 2026 10.529 (10.53), Oct 2026 17.712 (17.71), Apr 2026 1.596 (1.70,
 likely later corrections by APG in a month with many negative hours).
@@ -117,3 +130,5 @@ official value is published; until then the previous month (PV and base) is reco
   ahead of the integration itself.
 - 2026-11-15 — Switched all prices and the deduction default from ct/kWh to EUR/kWh (0.015 EUR/kWh).
 - 2026-11-15 — Prior for the month estimate: backtested methods, default base × capture rate (`PriorMethod`).
+- 2026-11-15 — Milestone 2: `sources.py` (Energy-Charts client, E-Control xlsx parser), tests against recorded
+  responses and a local test server, opt-in live tests; ruff for lint/format.

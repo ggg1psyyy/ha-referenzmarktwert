@@ -1,7 +1,8 @@
 """Tests for the pure calculation module.
 
 Fixtures: Energy-Charts responses for Sep/Oct 2026 (Austria, Solar + day-ahead price),
-data © Fraunhofer ISE Energy-Charts / Bundesnetzagentur SMARD.de, CC BY 4.0.
+data © Fraunhofer ISE Energy-Charts / Bundesnetzagentur SMARD.de, CC BY 4.0;
+E-Control's published history file (Referenzmarktwert_Entwicklung.xlsx).
 """
 
 import json
@@ -11,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from custom_components.referenzmarktwert import calc
+from custom_components.referenzmarktwert import calc, sources
 
 FIXTURES = Path(__file__).parent / "fixtures"
 VIENNA = ZoneInfo("Europe/Vienna")
@@ -29,8 +30,8 @@ def load_series(month: str) -> tuple[list[tuple[int, float | None]], list[tuple[
     price = json.loads((FIXTURES / f"price_at_{month}.json").read_text())
     solar = next(p for p in gen["production_types"] if p["name"] == "Solar")
     return (
-        list(zip(gen["unix_seconds"], solar["data"])),
-        list(zip(price["unix_seconds"], price["price"])),
+        list(zip(gen["unix_seconds"], solar["data"], strict=True)),
+        list(zip(price["unix_seconds"], price["price"], strict=True)),
     )
 
 
@@ -135,9 +136,9 @@ def test_prior_falls_back_to_previous_month() -> None:
 
 def test_backtest_default_prior_beats_alternatives() -> None:
     """Pins the choice of the default method to E-Control's published history (see ARCHITECTURE.md)."""
-    raw = json.loads((FIXTURES / "econtrol_monthly.json").read_text())["months"]
-    pv = {(int(k[:4]), int(k[5:])): v["pv"] for k, v in raw.items()}
-    base = {(int(k[:4]), int(k[5:])): v["base"] for k, v in raw.items()}
+    official = sources.parse_econtrol_xlsx((FIXTURES / "Referenzmarktwert_Entwicklung.xlsx").read_bytes())
+    pv = {m: v.value * 100 for m, v in official.items()}  # ct/kWh, to compare with ARCHITECTURE.md
+    base = {m: v.base * 100 for m, v in official.items() if v.base is not None}
     months = [m for m in pv if m >= (2023, 2)]  # 13 months of history needed
 
     def rmse(method: PriorMethod) -> float:
