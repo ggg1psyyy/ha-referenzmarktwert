@@ -29,7 +29,6 @@ from homeassistant.helpers.selector import (
 )
 from homeassistant.util import dt as dt_util
 
-from . import ReferenzmarktwertConfigEntry
 from .const import (
     CONF_AGGREGATION_SECONDS,
     CONF_BIDDING_ZONE,
@@ -66,8 +65,10 @@ from .const import (
     DEFAULT_OPTIONS,
     DOMAIN,
     PriorMethod,
+    entry_data,
+    entry_options,
 )
-from .coordinator import econtrol_config, energy_charts_config
+from .coordinator import ReferenzmarktwertConfigEntry, econtrol_config, energy_charts_config
 from .sources import (
     EnergyChartsClient,
     SourceConnectionError,
@@ -84,7 +85,9 @@ _URL = TextSelector(TextSelectorConfig(type=TextSelectorType.URL))
 _SECRET = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 
 
-def _number(minimum: float, maximum: float, step: float | Literal["any"], unit: str | None = None) -> NumberSelector:
+def _number_selector(
+    minimum: float, maximum: float, step: float | Literal["any"], unit: str | None = None
+) -> NumberSelector:
     config = NumberSelectorConfig(min=minimum, max=maximum, step=step, mode=NumberSelectorMode.BOX)
     if unit is not None:
         config["unit_of_measurement"] = unit
@@ -117,14 +120,14 @@ def sources_schema(values: Mapping[str, Any]) -> probatio.Schema:
                 field(CONF_ECONTROL_BASE_COLUMN, _TEXT, required=False),
                 field(CONF_ECONTROL_PUBLISHED_COLUMN, _TEXT, required=False),
                 field(CONF_TIME_ZONE, _TEXT),
-                field(CONF_TIMEOUT, _number(1, 300, 1, "s")),
+                field(CONF_TIMEOUT, _number_selector(1, 300, 1, "s")),
             ]
         )
     )
 
 
 def _deduction_field(value: float) -> dict[probatio.Marker, Any]:
-    return {probatio.Required(CONF_DEDUCTION, default=value): _number(-1, 1, "any", "EUR/kWh")}
+    return {probatio.Required(CONF_DEDUCTION, default=value): _number_selector(-1, 1, "any", "EUR/kWh")}
 
 
 def _option(current: Mapping[str, Any], key: str, selector: Any) -> dict[probatio.Marker, Any]:
@@ -133,13 +136,13 @@ def _option(current: Mapping[str, Any], key: str, selector: Any) -> dict[probati
 
 def unique_id(data: Mapping[str, Any]) -> str:
     """One entry per data series: country, bidding zone, generation type and E-Control column."""
-    d = {**DEFAULT_DATA, **data}
+    d = entry_data(data)
     parts = (d[CONF_COUNTRY], d[CONF_BIDDING_ZONE], d[CONF_PRODUCTION_TYPE], d[CONF_ECONTROL_VALUE_COLUMN])
     return "_".join(str(p).strip().lower() for p in parts)
 
 
 def title(data: Mapping[str, Any]) -> str:
-    production = {**DEFAULT_DATA, **data}[CONF_PRODUCTION_TYPE]
+    production = entry_data(data)[CONF_PRODUCTION_TYPE]
     return (
         "Referenzmarktwert PV"
         if production == DEFAULT_DATA[CONF_PRODUCTION_TYPE]
@@ -230,7 +233,7 @@ class ReferenzmarktwertConfigFlow(ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
         placeholders: dict[str, str] = {"error": ""}
-        values: Mapping[str, Any] = {**DEFAULT_DATA, **entry.data}
+        values: Mapping[str, Any] = entry_data(entry.data)
         if user_input is not None:
             values = _clean(user_input)
             new_id = unique_id(values)
@@ -241,7 +244,11 @@ class ReferenzmarktwertConfigFlow(ConfigFlow, domain=DOMAIN):
             errors, found = await validate_sources(self.hass, values)
             placeholders.update(found)
             if not errors:
-                return self.async_update_reload_and_abort(entry, unique_id=new_id, title=title(values), data=values)
+                # the title follows the data series, unless the user has renamed the entry
+                renamed = entry.title != title(entry.data)
+                return self.async_update_reload_and_abort(
+                    entry, unique_id=new_id, title=entry.title if renamed else title(values), data=values
+                )
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=sources_schema(values),
@@ -256,7 +263,7 @@ class ReferenzmarktwertOptionsFlow(OptionsFlowWithReload):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             return self.async_create_entry(data=user_input)
-        current = {**DEFAULT_OPTIONS, **self.config_entry.options}
+        current = entry_options(self.config_entry.options)
         schema = probatio.Schema(
             {
                 **_deduction_field(current[CONF_DEDUCTION]),
@@ -268,19 +275,21 @@ class ReferenzmarktwertOptionsFlow(OptionsFlowWithReload):
                     )
                 ),
                 probatio.Required(CONF_AGGREGATION_SECONDS, default=current[CONF_AGGREGATION_SECONDS]): probatio.All(
-                    _number(900, 3600, 900, "s"), probatio.Coerce(int)
+                    _number_selector(900, 3600, 900, "s"), probatio.Coerce(int)
                 ),
-                **_option(current, CONF_UPDATE_INTERVAL, _number(15, 1440, 1, "min")),
-                **_option(current, CONF_SUNRISE_OFFSET, _number(-180, 360, 1, "min")),
-                **_option(current, CONF_SUNSET_OFFSET, _number(-180, 720, 1, "min")),
-                **_option(current, CONF_OVERLAP, _number(0, 48, 1, "h")),
+                **_option(current, CONF_UPDATE_INTERVAL, _number_selector(15, 1440, 1, "min")),
+                **_option(current, CONF_SUNRISE_OFFSET, _number_selector(-180, 360, 1, "min")),
+                **_option(current, CONF_SUNSET_OFFSET, _number_selector(-180, 720, 1, "min")),
+                **_option(current, CONF_OVERLAP, _number_selector(0, 48, 1, "h")),
                 **_option(current, CONF_FULL_REFRESH_TIME, TimeSelector()),
                 **_option(current, CONF_PRICE_TIME, TimeSelector()),
-                **_option(current, CONF_PRICE_RETRY, _number(5, 1440, 1, "min")),
-                **_option(current, CONF_OFFICIAL_INTERVAL, _number(1, 168, 1, "h")),
-                **_option(current, CONF_OFFICIAL_EARLY_INTERVAL, _number(1, 24, 1, "h")),
-                **_option(current, CONF_OFFICIAL_EARLY_DAYS, probatio.All(_number(1, 31, 1), probatio.Coerce(int))),
-                **_option(current, CONF_REQUEST_DELAY, _number(0, 30, 0.5, "s")),
+                **_option(current, CONF_PRICE_RETRY, _number_selector(5, 1440, 1, "min")),
+                **_option(current, CONF_OFFICIAL_INTERVAL, _number_selector(1, 168, 1, "h")),
+                **_option(current, CONF_OFFICIAL_EARLY_INTERVAL, _number_selector(1, 24, 1, "h")),
+                **_option(
+                    current, CONF_OFFICIAL_EARLY_DAYS, probatio.All(_number_selector(1, 31, 1), probatio.Coerce(int))
+                ),
+                **_option(current, CONF_REQUEST_DELAY, _number_selector(0, 30, 0.5, "s")),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

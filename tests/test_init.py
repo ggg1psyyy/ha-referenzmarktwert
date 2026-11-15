@@ -1,18 +1,27 @@
 """Setup, sensors, download schedule, stored data, failures and unloading in a real (test) Home Assistant."""
 
+import asyncio
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 import pytest
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.referenzmarktwert import calc
-from custom_components.referenzmarktwert.const import DEFAULT_ECONTROL_XLSX_URL, DOMAIN
-from custom_components.referenzmarktwert.coordinator import storage_key
+from custom_components.referenzmarktwert.cache import STORAGE_VERSION
+from custom_components.referenzmarktwert.const import (
+    CONF_REQUEST_DELAY,
+    DEFAULT_ECONTROL_XLSX_URL,
+    DEFAULT_ENERGY_CHARTS_BASE_URL,
+    DOMAIN,
+)
+from custom_components.referenzmarktwert.coordinator import deprecation_issue_id, storage_key
 from custom_components.referenzmarktwert.diagnostics import async_get_config_entry_diagnostics
 
 from .conftest import (
@@ -186,6 +195,13 @@ async def test_rate_limit_retries_later(
     assert "rate limited (HTTP 429)" in caplog.text
     assert "Unexpected error" not in caplog.text
 
+    # a retry while Energy-Charts still asks us to wait: no request, and still no empty sensors
+    aioclient_mock.mock_calls.clear()
+    await hass.config_entries.async_reload(config_entry.entry_id)
+    await hass.async_block_till_done()
+    assert config_entry.state is ConfigEntryState.SETUP_RETRY
+    assert energy_charts_calls(aioclient_mock) == 0
+
 
 @pytest.mark.freeze_time("2026-10-15T09:00:00+00:00")
 async def test_energy_charts_outage_keeps_stored_data(
@@ -260,6 +276,53 @@ async def test_unload_and_remove(
     await hass.config_entries.async_remove(config_entry.entry_id)
     await hass.async_block_till_done()
     assert storage_key(config_entry.entry_id) not in hass_storage  # deleted with the entry
+
+
+@pytest.mark.freeze_time(NOW)
+async def test_no_save_after_unload(
+    hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts, hass_storage
+) -> None:
+    """An update still running when the entry is unloaded (or removed) must not write the file again."""
+    await setup(hass, config_entry)
+    coordinator = config_entry.runtime_data
+    assert await hass.config_entries.async_unload(config_entry.entry_id)
+    del hass_storage[storage_key(config_entry.entry_id)]
+    coordinator.state.official_attempt = None  # something is due
+    await coordinator._async_update_data()
+    assert storage_key(config_entry.entry_id) not in hass_storage
+
+
+@pytest.mark.freeze_time(NOW)
+@pytest.mark.parametrize("version", [STORAGE_VERSION - 1, STORAGE_VERSION + 1])  # older; newer after a downgrade
+async def test_stored_data_of_another_version_is_downloaded_again(
+    hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts, hass_storage, version: int
+) -> None:
+    key = storage_key(config_entry.entry_id)
+    hass_storage[key] = {"version": version, "minor_version": 1, "key": key, "data": {"x": 1}}
+    await setup(hass, config_entry)
+    assert config_entry.state is ConfigEntryState.LOADED
+    assert requests_to(energy_charts, GENERATION_URL)  # downloaded again
+
+
+@pytest.mark.freeze_time(NOW)
+async def test_requests_are_paused_between_not_after(
+    hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts
+) -> None:
+    """The pause keeps us below Energy-Charts' rate limit; after the last request it only costs time."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, data=dict(config_entry.data), options={**config_entry.options, CONF_REQUEST_DELAY: 0.25}
+    )
+    pauses = []
+    sleep = asyncio.sleep
+
+    async def record(delay, *args, **kwargs):
+        if delay == 0.25:
+            pauses.append(delay)
+        return await sleep(0, *args, **kwargs)
+
+    with patch("custom_components.referenzmarktwert.coordinator.asyncio.sleep", record):
+        await setup(hass, entry)
+    assert len(pauses) == energy_charts_calls(energy_charts) - 1  # generation, prices, reference: two pauses
 
 
 @pytest.mark.freeze_time(NOW)
@@ -355,23 +418,24 @@ async def test_month_change(
 @pytest.mark.freeze_time(NOW)
 async def test_deprecation_notice(hass: HomeAssistant, config_entry: MockConfigEntry, aioclient_mock) -> None:
     """Energy-Charts announces the end of an endpoint with "deprecated": true: a repair notice appears."""
-    from homeassistant.helpers import issue_registry as ir
-
     generation = {**fixture_json("public_power_at_2026-10.json"), "deprecated": True}
     price = {**fixture_json("price_at_2026-10.json"), "deprecated": True}
     aioclient_mock.get(GENERATION_URL, json=generation)
     aioclient_mock.get(PRICE_URL, json=price)
     aioclient_mock.get(DEFAULT_ECONTROL_XLSX_URL, content=econtrol_xlsx())
     await setup(hass, config_entry)
-    issue = ir.async_get(hass).async_get_issue(DOMAIN, f"energy_charts_deprecated_{config_entry.entry_id}")
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, deprecation_issue_id(config_entry.entry_id))
     assert issue is not None
     assert issue.translation_key == "energy_charts_deprecated"
+    assert issue.learn_more_url == DEFAULT_ENERGY_CHARTS_BASE_URL  # the configured API
     assert config_entry.state is ConfigEntryState.LOADED  # it still works
+
+    await hass.config_entries.async_remove(config_entry.entry_id)
+    await hass.async_block_till_done()
+    assert ir.async_get(hass).async_get_issue(DOMAIN, deprecation_issue_id(config_entry.entry_id)) is None
 
 
 @pytest.mark.freeze_time(NOW)
 async def test_no_deprecation_notice(hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts) -> None:
-    from homeassistant.helpers import issue_registry as ir
-
     await setup(hass, config_entry)
-    assert ir.async_get(hass).async_get_issue(DOMAIN, f"energy_charts_deprecated_{config_entry.entry_id}") is None
+    assert ir.async_get(hass).async_get_issue(DOMAIN, deprecation_issue_id(config_entry.entry_id)) is None

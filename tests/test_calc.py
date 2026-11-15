@@ -175,3 +175,14 @@ def test_resolution() -> None:
     assert calc.resolution([(0, 1.0), (900, 1.0), (1800, None)], 3600) == 900
     assert calc.resolution([(0, 1.0), (3600, 1.0), (7200, 1.0)], 900) == 3600
     assert calc.resolution([(0, 1.0)], 900) == 900
+
+
+def test_covered_until_uses_the_series_step() -> None:
+    assert calc.covered_until([(0, 1.0), (900, 2.0), (1800, None)]) == 1800
+    assert calc.covered_until([(0, 1.0), (3600, 2.0)]) == 7200  # hourly prices: the last hour counts whole
+    assert calc.covered_until([(0, 1.0)], 3600) == 3600
+    assert calc.covered_until([(0, None)]) is None
+
+
+def test_clamp01() -> None:
+    assert [calc.clamp01(x) for x in (-0.5, 0.25, 7.0)] == [0.0, 0.25, 1.0]

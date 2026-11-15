@@ -1,17 +1,13 @@
 """Referenzmarktwert PV: the Austrian reference market value (§ 13 EAG) as Home Assistant sensors."""
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.storage import Store
+from homeassistant.helpers import issue_registry as ir
 
-from .cache import STORAGE_VERSION
-from .coordinator import ReferenzmarktwertCoordinator, storage_key
+from .const import DOMAIN
+from .coordinator import CacheStore, ReferenzmarktwertConfigEntry, ReferenzmarktwertCoordinator, deprecation_issue_id
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
-
-# A config entry whose `runtime_data` is our coordinator (typed, so editors and type checkers know).
-type ReferenzmarktwertConfigEntry = ConfigEntry[ReferenzmarktwertCoordinator]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ReferenzmarktwertConfigEntry) -> bool:
@@ -29,5 +25,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ReferenzmarktwertConfig
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ReferenzmarktwertConfigEntry) -> None:
-    """The entry was deleted: delete its stored downloads too."""
-    await Store(hass, STORAGE_VERSION, storage_key(entry.entry_id)).async_remove()
+    """The entry was deleted: delete its stored downloads and its repair notice too."""
+    await CacheStore(hass, entry.entry_id).async_remove()
+    ir.async_delete_issue(hass, DOMAIN, deprecation_issue_id(entry.entry_id))

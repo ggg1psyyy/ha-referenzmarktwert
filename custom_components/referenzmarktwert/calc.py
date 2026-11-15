@@ -13,16 +13,17 @@ quarter-hour prices, the generation the mean power (MW) over the period = its en
 """
 
 from collections import defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, tzinfo
 from itertools import pairwise
 from statistics import fmean
 
-from .const import DEFAULT_AGGREGATION_SECONDS, DEFAULT_PRIOR_METHOD, KWH_PER_MWH, PriorMethod
+from .const import DEFAULT_AGGREGATION_SECONDS, DEFAULT_PRIOR_METHOD, KWH_PER_MWH, QUARTER_HOUR, PriorMethod
 
 # A time series as (unix_seconds, value) pairs. value may be None (missing data point).
-type Series = Iterable[tuple[int, float | None]]
+# A Sequence (like C#'s IReadOnlyList), not an Iterable: several functions read it more than once.
+type Series = Sequence[tuple[int, float | None]]
 
 # A calendar month as (year, month), e.g. (2026, 10). Tuples compare and hash naturally.
 type Month = tuple[int, int]
@@ -44,7 +45,7 @@ def aggregate(
     for ts, value in series:
         if value is None or not start <= ts < end:
             continue
-        buckets[ts - ts % period].append(value)
+        buckets[floor_to(ts, period)].append(value)
     return {bucket: fmean(values) for bucket, values in buckets.items()}
 
 
@@ -119,7 +120,7 @@ def elapsed_share(reference: Mapping[int, float], reference_start: int, elapsed:
     if total <= 0:
         return None
     done = sum(v for ts, v in reference.items() if ts - reference_start < elapsed)
-    return min(1.0, max(0.0, done / total))
+    return clamp01(done / total)
 
 
 def shift_month(month: Month, delta: int) -> Month:
@@ -142,10 +143,10 @@ def month_of(ts: float, tz: tzinfo) -> Month:
     return local.year, local.month
 
 
-def covered_until(series: Series, step: int) -> int | None:
-    """End of the latest point that has a value: its timestamp + `step` (the point's duration)."""
+def covered_until(series: Series, default_step: int = QUARTER_HOUR) -> int | None:
+    """End of the latest point that has a value: its timestamp + the series' time step (`resolution`)."""
     stamps = [ts for ts, value in series if value is not None]
-    return max(stamps) + step if stamps else None
+    return max(stamps) + resolution(series, default_step) if stamps else None
 
 
 def resolution(series: Series, default: int) -> int:
@@ -153,6 +154,11 @@ def resolution(series: Series, default: int) -> int:
     stamps = sorted({ts for ts, _ in series})
     gaps = [b - a for a, b in pairwise(stamps)]
     return min(gaps) if gaps else default
+
+
+def clamp01(value: float) -> float:
+    """`value` limited to 0..1 (a share)."""
+    return min(1.0, max(0.0, value))
 
 
 def floor_to(ts: int, period: int) -> int:
@@ -168,7 +174,7 @@ def base_price(price: Series, start: int, end: int, period: int = DEFAULT_AGGREG
 
 def time_share(start: int, end: int, until: int) -> float:
     """Share (0..1) of [start, end) that lies before `until`."""
-    return min(1.0, max(0.0, (until - start) / (end - start)))
+    return clamp01((until - start) / (end - start))
 
 
 def _price_level(previous: float | None, running: float | None, running_weight: float) -> float | None:
@@ -177,7 +183,7 @@ def _price_level(previous: float | None, running: float | None, running_weight: 
         return previous
     if previous is None:
         return running
-    w = min(1.0, max(0.0, running_weight))
+    w = clamp01(running_weight)
     return (1 - w) * previous + w * running
 
 
@@ -218,7 +224,7 @@ def blend(month_so_far: float | None, previous: float | None, known_share: float
         return previous
     if previous is None or known_share is None:
         return month_so_far
-    share = min(1.0, max(0.0, known_share))
+    share = clamp01(known_share)
     return share * month_so_far + (1 - share) * previous
 
 

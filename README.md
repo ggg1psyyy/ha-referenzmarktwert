@@ -150,7 +150,8 @@ answer), the integration shows a repair notice in Home Assistant.
 Generation outside the daylight window is zero or nearly so (a few MW at dawn and dusk, about 0.05 % of a month's
 energy); the next download fetches those points too, so nothing is lost. Downloads are stored in Home Assistant's
 `.storage` folder, so a restart or reload costs no downloads; the previous month needs no extra download either (it was
-the running month). The connection test in setup and reconfigure makes three small requests: generation of one day,
+the running month). If that file cannot be read (damaged, or from another version of the integration), the data is
+simply downloaded again; deleting the entry deletes the file. The connection test in setup and reconfigure makes three small requests: generation of one day,
 prices of one day, and the E-Control file. Per day: about 12–15 small Energy-Charts requests in November, over 20 around June (longer daylight), and one
 E-Control check.
 

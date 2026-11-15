@@ -15,10 +15,9 @@ from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from . import ReferenzmarktwertConfigEntry
 from .calc import Month, payout
 from .const import DOMAIN
-from .coordinator import ReferenzmarktwertCoordinator, ReferenzmarktwertData
+from .coordinator import ReferenzmarktwertConfigEntry, ReferenzmarktwertCoordinator, ReferenzmarktwertData
 
 # Coordinator-based entities never update themselves, so no limit on parallel updates is needed.
 PARALLEL_UPDATES = 0

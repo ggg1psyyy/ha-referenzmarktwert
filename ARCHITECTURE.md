@@ -119,7 +119,10 @@ tests/             # pytest, recorded responses as fixtures
   settings are told apart from connection problems by the HTTP status (Energy-Charts answers 400 for an unknown
   zone/country).
 - Price sensors: `EUR/kWh`, state class measurement, no device class (monetary only allows `total`); the month table
-  attribute is excluded from the recorder. Diagnostics redact the optional header value.
+  attribute is excluded from the recorder. Diagnostics redact the optional header values and show the URLs without
+  query and credentials (`sources.display_url`, also used in every error message, which ends up in the log).
+- *Reconfigure* changes the entry's title along with the data series only while it is still the automatic one; a
+  title the user set is kept.
 - Brand image in `custom_components/referenzmarktwert/brand/` (supported since HA 2026.3), drawn by
   `tools/make_icon.py`.
 - hassfest could not be run locally (it executes HA core's scripts); it runs in CI (GitHub Actions: hassfest,
@@ -164,10 +167,17 @@ for prices, E-Control, the month change — and a long daytime interval cannot s
   Last-Modified date, and when what was last tried. A restart or reload therefore costs no downloads, and the previous
   month needs no extra download (it was the running month). A **fingerprint** of the data-source settings is stored
   with it: after a *Reconfigure* to other sources the data is discarded. The file is deleted with the entry
-  (`async_remove_entry`). Diagnostics show counts, never sunrise/sunset-based times (they would reveal the location).
+  (`async_remove_entry`, which also deletes the repair notice). Diagnostics show counts, never sunrise/sunset-based
+  times (they would reveal the location). **Unreadable data is downloaded again, never a reason to fail**: a file of
+  another format version (older, or newer after a downgrade) loads as empty (`CacheStore`: no migration code for
+  data that can be fetched anew), unexpected content too (`CacheState.from_dict`); a damaged JSON file is renamed to
+  `*.corrupt.<time>` by Home Assistant itself. After an unload an update still running does not save any more (it
+  would recreate the file of a removed entry).
 - **Failures**: an Energy-Charts outage keeps the stored data and the sensors (logged once when it starts and once
-  when it recovers); only if nothing was ever downloaded is the update failed (setup is retried). HTTP 429 stores a
-  "not before" time from `Retry-After`; E-Control is not blocked by it. Without an official table (e.g. the download
+  when it recovers); only if nothing was ever downloaded is the update failed (setup is retried) — also when a
+  retry is still blocked by a rate limit. HTTP 429 stores a "not before" time from `Retry-After`, limited to one day
+  (an endless value would be stored and block for good); E-Control is not blocked by it. The pause between requests
+  is only made between them, not after the last. Without an official table (e.g. the download
   failed before a restart) E-Control counts as failing and is retried every daytime interval.
 - The step of a series is taken from the data (`calc.resolution`), not assumed to be 15 min: with hourly prices the
   coverage would otherwise look incomplete and the prices would be fetched every 30 min.
@@ -258,3 +268,9 @@ better mid-month, worse early, not adopted.
   lists every request and the data licenses; the E-Control fixture is generated instead of copied.
 - 2026-11-15 — CI workflows (hassfest, Marketplace/HACS validation, lint, tests); repair notice when Energy-Charts
   marks its endpoints as deprecated; repository topics set.
+- 2026-11-15 — Code review before the first release: Reconfigure keeps a user-set title; `Retry-After` limited to a
+  day; unreadable stored data (damaged, other format version) is downloaded again instead of failing setup; the repair
+  notice is deleted with the entry; a rate-limited retry no longer starts with empty sensors; no save after unload;
+  URLs without query/credentials in errors and diagnostics; duplicates removed (`calc.covered_until` derives the step,
+  `calc.clamp01`, `const.entry_data`/`entry_options`, one test fake for all tests); `Series` is a `Sequence`;
+  coordinator data compared before notifying the sensors (`always_update=False`).

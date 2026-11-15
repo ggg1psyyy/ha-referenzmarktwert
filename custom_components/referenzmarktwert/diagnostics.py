@@ -6,10 +6,12 @@ from typing import Any
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
-from . import ReferenzmarktwertConfigEntry
-from .const import CONF_ECONTROL_HEADER_VALUE, CONF_HEADER_VALUE
+from .const import CONF_ECONTROL_HEADER_VALUE, CONF_ECONTROL_URL, CONF_ENERGY_CHARTS_URL, CONF_HEADER_VALUE
+from .coordinator import ReferenzmarktwertConfigEntry
+from .sources import display_url
 
 TO_REDACT = {CONF_HEADER_VALUE, CONF_ECONTROL_HEADER_VALUE}  # may hold an API key
+URLS = (CONF_ENERGY_CHARTS_URL, CONF_ECONTROL_URL)  # shown without query and credentials
 
 
 async def async_get_config_entry_diagnostics(
@@ -18,8 +20,12 @@ async def async_get_config_entry_diagnostics(
     coordinator = entry.runtime_data
     data = coordinator.data
     state = coordinator.state
+    settings = async_redact_data(dict(entry.data), TO_REDACT)
+    for key in URLS:
+        if key in settings:
+            settings[key] = display_url(settings[key])
     return {
-        "data": async_redact_data(dict(entry.data), TO_REDACT),
+        "data": settings,
         "options": dict(entry.options),
         "last_update_success": coordinator.last_update_success,
         "estimate": asdict(data.estimate) if data else None,

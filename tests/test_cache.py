@@ -2,6 +2,8 @@
 
 from datetime import date
 
+import pytest
+
 from custom_components.referenzmarktwert.cache import CacheState, SeriesCache
 from custom_components.referenzmarktwert.sources import OfficialValue
 
@@ -47,7 +49,7 @@ def test_state_round_trip() -> None:
         generation=SeriesCache([(0, 1.0), (900, None)], 0),
         price=SeriesCache([(0, 50.0)], 0),
         reference_month=(2025, 11),
-        reference=[(10, 2.0)],
+        reference=SeriesCache([(10, 2.0)], 0),
         official={(2026, 10): OfficialValue((2026, 10), 0.1771, 0.1034, date(2026, 11, 4))},
         official_last_modified="Thu, 05 Nov 2026 14:54:13 GMT",
         official_checked=5.0,
@@ -62,7 +64,7 @@ def test_state_round_trip() -> None:
     assert restored.generation.since == 0
     assert restored.price.series() == [(0, 50.0)]
     assert restored.reference_month == (2025, 11)
-    assert restored.reference == [(10, 2.0)]
+    assert restored.reference.series() == [(10, 2.0)]
     assert restored.official == state.official
     assert restored.official_last_modified == state.official_last_modified
     assert (restored.generation_attempt, restored.full_refresh, restored.price_attempt) == (1.0, 2.0, 3.0)
@@ -80,3 +82,20 @@ def test_last_modified_needs_its_table() -> None:
     """A Last-Modified date without the table would make E-Control answer 304 and leave us empty."""
     saved = CacheState(official_last_modified="Thu, 05 Nov 2026 14:54:13 GMT").to_dict("x")
     assert CacheState.from_dict(saved, "x").official_last_modified is None
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        {"generation": {"points": [["x", 1.0]]}},  # not a timestamp
+        {"generation": {"points": [[1]]}},  # a point without value
+        {"official": [[2026, 10]]},  # a month without values
+        {"official": [[2026, 10, 0.1, None, "not a date"]]},
+        {"reference_month": 2025},
+        {"price": "nonsense"},
+    ],
+)
+def test_damaged_data_starts_empty(damage: dict) -> None:
+    """Unreadable stored data must not stop the integration: it is discarded and downloaded again."""
+    saved = {**CacheState(generation=SeriesCache([(0, 1.0)], 0)).to_dict("x"), **damage}
+    assert len(CacheState.from_dict(saved, "x").generation) == 0

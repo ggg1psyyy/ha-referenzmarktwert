@@ -245,6 +245,36 @@ async def test_fetch_econtrol_not_modified(server: TestServer) -> None:
     assert changed.table is not None  # an older date: the file is downloaded
 
 
+@pytest.mark.parametrize(
+    ("header", "expected"),
+    [("7", 7.0), ("inf", 86400.0), ("1e400", 86400.0), ("999999", 86400.0), ("-5", 0.0), ("nan", None), (None, None)],
+)
+async def test_retry_after_is_limited(aioclient_mock, header: str | None, expected: float | None) -> None:
+    """A huge or endless Retry-After would be stored and block Energy-Charts for good."""
+    aioclient_mock.get("https://ec.test/price", status=429, headers={"Retry-After": header} if header else None)
+    session = aioclient_mock.create_session(asyncio.get_running_loop())
+    with pytest.raises(SourceRateLimitError) as caught:
+        await EnergyChartsClient(session, EnergyChartsConfig(base_url="https://ec.test")).price(1, 2)
+    await session.close()
+    assert caught.value.retry_after == expected
+
+
+def test_display_url_hides_secrets() -> None:
+    assert sources.display_url("https://user:pw@api.test/v1?key=SECRET#x") == "https://api.test/v1"
+    assert sources.display_url("https://www.e-control.at/a.xlsx") == "https://www.e-control.at/a.xlsx"
+
+
+async def test_error_messages_hide_the_query(aioclient_mock) -> None:
+    """Error messages end up in the log: a key in the configured URL must not."""
+    aioclient_mock.get("https://ec.test/x.xlsx?key=SECRET", status=500)
+    session = aioclient_mock.create_session(asyncio.get_running_loop())
+    with pytest.raises(SourceConnectionError) as caught:
+        await sources.fetch_econtrol(session, EControlConfig(url="https://ec.test/x.xlsx?key=SECRET"))
+    await session.close()
+    assert "SECRET" not in str(caught.value)
+    assert "https://ec.test/x.xlsx: HTTP 500" in str(caught.value)
+
+
 async def test_unexpected_304_is_an_error(aioclient_mock) -> None:
     """A 304 without a conditional request makes no sense: it must not be taken as "no change"."""
     aioclient_mock.get("https://ec.test/x.xlsx", status=304)

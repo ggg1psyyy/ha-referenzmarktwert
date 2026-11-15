@@ -2,9 +2,10 @@
 
 Pure: no Home Assistant, no network, no clock. The coordinator merges every download in here and
 saves `to_dict()` with Home Assistant's storage helper; `from_dict()` restores it after a restart,
-so a restart costs no downloads.
+so a restart costs no downloads. Saved data that cannot be read is discarded: it is downloaded again.
 """
 
+import logging
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import date
@@ -14,6 +15,8 @@ from .calc import Month, Series
 from .sources import OfficialValue
 
 STORAGE_VERSION = 1
+
+_LOGGER = logging.getLogger(__package__)
 
 
 class SeriesCache:
@@ -63,7 +66,9 @@ class SeriesCache:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> SeriesCache:
-        return cls(((int(ts), v) for ts, v in data.get("points", [])), data.get("since"))
+        since = data.get("since")
+        points = ((int(ts), None if v is None else float(v)) for ts, v in data.get("points", []))
+        return cls(points, None if since is None else int(since))
 
 
 @dataclass
@@ -73,7 +78,7 @@ class CacheState:
     generation: SeriesCache = field(default_factory=SeriesCache)
     price: SeriesCache = field(default_factory=SeriesCache)
     reference_month: Month | None = None  # the same month last year, for the expected generation share
-    reference: list[tuple[int, float | None]] = field(default_factory=list)
+    reference: SeriesCache = field(default_factory=SeriesCache)
     official: dict[Month, OfficialValue] = field(default_factory=dict)
     official_last_modified: str | None = None  # Last-Modified of the file the table came from
     official_checked: float | None = None  # last successful check (downloaded or "not modified")
@@ -90,7 +95,7 @@ class CacheState:
             "generation": self.generation.to_dict(),
             "price": self.price.to_dict(),
             "reference_month": list(self.reference_month) if self.reference_month else None,
-            "reference": [[ts, v] for ts, v in self.reference],
+            "reference": self.reference.to_dict(),
             "official": [
                 [v.month[0], v.month[1], v.value, v.base, v.published.isoformat() if v.published else None]
                 for v in self.official.values()
@@ -106,9 +111,18 @@ class CacheState:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any] | None, fingerprint: str) -> CacheState:
-        """Restore a saved state; start empty if there is none or it belongs to other data sources."""
+        """Restore a saved state; start empty if there is none, it belongs to other data sources or it
+        cannot be read (damaged, or written by another version)."""
         if not data or data.get("fingerprint") != fingerprint:
             return cls()
+        try:
+            return cls._restore(data)
+        except (AttributeError, KeyError, IndexError, TypeError, ValueError) as err:
+            _LOGGER.warning("Stored data could not be read, downloading it again: %r", err)
+            return cls()
+
+    @classmethod
+    def _restore(cls, data: Mapping[str, Any]) -> CacheState:
         official = {}
         for year, month, value, base, published in data.get("official", []):
             official[(year, month)] = OfficialValue(
@@ -119,7 +133,7 @@ class CacheState:
             generation=SeriesCache.from_dict(data.get("generation", {})),
             price=SeriesCache.from_dict(data.get("price", {})),
             reference_month=(reference_month[0], reference_month[1]) if reference_month else None,
-            reference=[(int(ts), v) for ts, v in data.get("reference", [])],
+            reference=SeriesCache.from_dict(data.get("reference", {})),
             official=official,
             # a Last-Modified date without the table it belongs to must not be used for a conditional request
             official_last_modified=data.get("official_last_modified") if official else None,

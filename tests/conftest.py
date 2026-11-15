@@ -15,7 +15,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker, AiohttpClientMockResponse
 from yarl import URL
 
-from custom_components.referenzmarktwert import calc, sources
+from custom_components.referenzmarktwert import sources
 from custom_components.referenzmarktwert.const import (
     CONF_REQUEST_DELAY,
     DEFAULT_DATA,
@@ -52,20 +52,6 @@ def internet() -> None:
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Let Home Assistant load integrations from custom_components/ in every test."""
-
-
-@pytest.fixture
-def mock_sources(aioclient_mock: AiohttpClientMocker) -> AiohttpClientMocker:
-    """Energy-Charts and E-Control answered from recorded data: October 2026, and October 2025 for the
-    reference month (registered first: the first matching mock answers)."""
-    reference_start, _ = calc.month_bounds((2025, 10), ZoneInfo("Europe/Vienna"))
-    aioclient_mock.get(f"{GENERATION_URL}?start={reference_start}", json=fixture_json("public_power_at_2025-10.json"))
-    aioclient_mock.get(PRICE_URL, json=fixture_json("price_at_2026-10.json"))
-    aioclient_mock.get(GENERATION_URL, json=fixture_json("public_power_at_2026-10.json"))
-    aioclient_mock.get(
-        DEFAULT_ECONTROL_XLSX_URL, content=(FIXTURES / "Referenzmarktwert_Entwicklung.xlsx").read_bytes()
-    )
-    return aioclient_mock
 
 
 @pytest.fixture

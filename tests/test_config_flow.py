@@ -23,9 +23,13 @@ from custom_components.referenzmarktwert.const import (
     DOMAIN,
 )
 
-from .conftest import GENERATION_URL, PRICE_URL
+from .conftest import FIXTURES, GENERATION_URL, PRICE_URL, fake_sources
 
 SETUP = "custom_components.referenzmarktwert.async_setup_entry"
+XLSX = (FIXTURES / "Referenzmarktwert_Entwicklung.xlsx").read_bytes()
+
+# the recorded Energy-Charts data (see conftest.fake_sources) covers this time
+pytestmark = pytest.mark.freeze_time("2026-10-20T12:00:00+00:00")
 
 
 def sources(**changes) -> dict:
@@ -38,7 +42,7 @@ async def start(hass: HomeAssistant) -> dict:
     return result
 
 
-async def test_user_flow_creates_entry(hass: HomeAssistant, mock_sources) -> None:
+async def test_user_flow_creates_entry(hass: HomeAssistant, energy_charts) -> None:
     result = await start(hass)
     with patch(SETUP, return_value=True):
         result = await hass.config_entries.flow.async_configure(
@@ -51,17 +55,13 @@ async def test_user_flow_creates_entry(hass: HomeAssistant, mock_sources) -> Non
     assert result["result"].unique_id == "at_at_solar_d"
 
 
-async def test_user_flow_other_technology_title(hass: HomeAssistant, mock_sources, aioclient_mock) -> None:
+async def test_user_flow_other_technology_title(hass: HomeAssistant, energy_charts, aioclient_mock) -> None:
     aioclient_mock.clear_requests()
     aioclient_mock.get(
         GENERATION_URL, json={"unix_seconds": [1], "production_types": [{"name": "Wind onshore", "data": [1.0]}]}
     )
     aioclient_mock.get(PRICE_URL, json={"unix_seconds": [1], "price": [1.0], "unit": "EUR / MWh"})
-    from .conftest import FIXTURES
-
-    aioclient_mock.get(
-        DEFAULT_ECONTROL_XLSX_URL, content=(FIXTURES / "Referenzmarktwert_Entwicklung.xlsx").read_bytes()
-    )
+    aioclient_mock.get(DEFAULT_ECONTROL_XLSX_URL, content=XLSX)
     result = await start(hass)
     with patch(SETUP, return_value=True):
         result = await hass.config_entries.flow.async_configure(
@@ -71,7 +71,7 @@ async def test_user_flow_other_technology_title(hass: HomeAssistant, mock_source
     assert result["title"] == "Referenzmarktwert Wind onshore"
 
 
-async def test_user_flow_already_configured(hass: HomeAssistant, config_entry: MockConfigEntry, mock_sources) -> None:
+async def test_user_flow_already_configured(hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts) -> None:
     config_entry.add_to_hass(hass)
     result = await start(hass)
     result = await hass.config_entries.flow.async_configure(
@@ -95,15 +95,8 @@ async def test_user_flow_already_configured(hass: HomeAssistant, config_entry: M
 async def test_user_flow_errors_recover(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, url: str, mock: dict, error: str
 ) -> None:
-    from .conftest import FIXTURES, fixture_json
-
-    good = {
-        PRICE_URL: {"json": fixture_json("price_at_2026-10.json")},
-        GENERATION_URL: {"json": fixture_json("public_power_at_2026-10.json")},
-        DEFAULT_ECONTROL_XLSX_URL: {"content": (FIXTURES / "Referenzmarktwert_Entwicklung.xlsx").read_bytes()},
-    }
-    for target, response in good.items():
-        aioclient_mock.get(target, **(mock if target == url else response))
+    aioclient_mock.get(url, **mock)  # registered first: answers instead of the working source
+    fake_sources(aioclient_mock, XLSX)
     result = await start(hass)
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_DEDUCTION: 0.015, SECTION_SOURCES: sources()}
@@ -114,8 +107,7 @@ async def test_user_flow_errors_recover(
 
     # the problem goes away: the same flow finishes
     aioclient_mock.clear_requests()
-    for target, response in good.items():
-        aioclient_mock.get(target, **response)
+    fake_sources(aioclient_mock, XLSX)
     with patch(SETUP, return_value=True):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {CONF_DEDUCTION: 0.015, SECTION_SOURCES: sources()}
@@ -123,7 +115,7 @@ async def test_user_flow_errors_recover(
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
-async def test_user_flow_invalid_time_zone(hass: HomeAssistant, mock_sources) -> None:
+async def test_user_flow_invalid_time_zone(hass: HomeAssistant, energy_charts) -> None:
     result = await start(hass)
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_DEDUCTION: 0.015, SECTION_SOURCES: sources(**{CONF_TIME_ZONE: "Mars/Olympus"})}
@@ -136,7 +128,7 @@ async def test_user_flow_invalid_time_zone(hass: HomeAssistant, mock_sources) ->
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
-async def test_reconfigure(hass: HomeAssistant, config_entry: MockConfigEntry, mock_sources) -> None:
+async def test_reconfigure(hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts) -> None:
     config_entry.add_to_hass(hass)
     result = await config_entry.start_reconfigure_flow(hass)
     assert result["type"] is FlowResultType.FORM
@@ -150,8 +142,34 @@ async def test_reconfigure(hass: HomeAssistant, config_entry: MockConfigEntry, m
     assert config_entry.unique_id == "at_de-lu_solar_d"
 
 
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        ("Referenzmarktwert PV", "Referenzmarktwert Wind"),  # automatic title: follows the series
+        ("My PV payout", "My PV payout"),  # renamed by the user: kept
+    ],
+)
+async def test_reconfigure_title(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, before: str, after: str
+) -> None:
+    entry = MockConfigEntry(domain=DOMAIN, title=before, unique_id="at_at_solar_d", data=sources())
+    entry.add_to_hass(hass)
+    aioclient_mock.get(
+        GENERATION_URL, json={"unix_seconds": [1], "production_types": [{"name": "Wind", "data": [1.0]}]}
+    )
+    aioclient_mock.get(PRICE_URL, json={"unix_seconds": [1], "price": [1.0], "unit": "EUR / MWh"})
+    aioclient_mock.get(DEFAULT_ECONTROL_XLSX_URL, content=XLSX)
+    result = await entry.start_reconfigure_flow(hass)
+    with patch(SETUP, return_value=True):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], sources(**{CONF_PRODUCTION_TYPE: "Wind"})
+        )
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.title == after
+
+
 async def test_reconfigure_to_existing_series_aborts(
-    hass: HomeAssistant, config_entry: MockConfigEntry, mock_sources
+    hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts
 ) -> None:
     config_entry.add_to_hass(hass)
     other = MockConfigEntry(domain=DOMAIN, unique_id="at_at_wind_d", data=sources(**{CONF_PRODUCTION_TYPE: "Wind"}))
@@ -165,7 +183,7 @@ async def test_reconfigure_to_existing_series_aborts(
 
 
 async def test_reconfigure_error_recovers(
-    hass: HomeAssistant, config_entry: MockConfigEntry, aioclient_mock: AiohttpClientMocker, mock_sources
+    hass: HomeAssistant, config_entry: MockConfigEntry, aioclient_mock: AiohttpClientMocker, energy_charts
 ) -> None:
     config_entry.add_to_hass(hass)
     result = await config_entry.start_reconfigure_flow(hass)

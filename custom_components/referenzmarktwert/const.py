@@ -4,8 +4,9 @@ Everything here is a *default*: the config/options flow lets the user override e
 This module must stay free of Home Assistant imports so the pure modules (calc, sources) can use it.
 """
 
+from collections.abc import Mapping
 from enum import StrEnum
-from typing import Final
+from typing import Any, Final
 
 DOMAIN: Final = "referenzmarktwert"
 
@@ -54,6 +55,11 @@ DEFAULT_ECONTROL_PUBLISHED_COLUMN: Final = "F"  # publication date as Excel date
 
 # --- HTTP --------------------------------------------------------------------------------------
 DEFAULT_REQUEST_TIMEOUT_SECONDS: Final = 30.0
+# A server's "Retry-After" is obeyed up to this long; a larger (or endless) value would block for good.
+MAX_RETRY_AFTER_SECONDS: Final = 86400.0
+
+# --- Data ----------------------------------------------------------------------------------------
+QUARTER_HOUR: Final = 900  # resolution of the Energy-Charts series (assumed if a series has < 2 points)
 
 # --- Time --------------------------------------------------------------------------------------
 DEFAULT_TIME_ZONE: Final = "Europe/Vienna"  # months are assigned in this zone
@@ -154,3 +160,13 @@ DEFAULT_OPTIONS: Final = {
     CONF_OFFICIAL_EARLY_DAYS: DEFAULT_OFFICIAL_EARLY_DAYS,
     CONF_REQUEST_DELAY: DEFAULT_REQUEST_DELAY_SECONDS,
 }
+
+
+def entry_data(data: Mapping[str, Any]) -> dict[str, Any]:
+    """A config entry's data with defaults for missing keys (e.g. keys added in a later version)."""
+    return {**DEFAULT_DATA, **data}
+
+
+def entry_options(options: Mapping[str, Any]) -> dict[str, Any]:
+    """A config entry's options with defaults for missing keys."""
+    return {**DEFAULT_OPTIONS, **options}

@@ -18,6 +18,7 @@ from datetime import date, timedelta
 from typing import Any
 
 import aiohttp
+from yarl import URL
 
 from .calc import Month
 from .const import (
@@ -33,6 +34,7 @@ from .const import (
     DEFAULT_ENERGY_CHARTS_PRICE_PATH,
     DEFAULT_PRODUCTION_TYPE,
     DEFAULT_REQUEST_TIMEOUT_SECONDS,
+    MAX_RETRY_AFTER_SECONDS,
 )
 
 # --- Errors --------------------------------------------------------------------------------------
@@ -85,8 +87,10 @@ async def _get(
     """GET `url`; map every failure to a SourceError.
 
     With `if_modified_since` (an earlier Last-Modified value) the server may answer 304 and send
-    nothing: the caller's copy is still current.
+    nothing: the caller's copy is still current. Error messages name the URL without its query and
+    credentials (they end up in the log and could hold a key).
     """
+    shown = display_url(url)
     request_headers = dict(headers)
     if if_modified_since:
         request_headers["If-Modified-Since"] = if_modified_since
@@ -101,25 +105,41 @@ async def _get(
             if response.status == 304 and if_modified_since:
                 return HttpResult(None, last_modified or if_modified_since)
             if response.status == 429:
-                raise SourceRateLimitError(f"{url}: rate limited (HTTP 429)", _retry_after(response))
+                raise SourceRateLimitError(f"{shown}: rate limited (HTTP 429)", _retry_after(response))
             if response.status != 200:
                 # 4xx bodies explain what was wrong (e.g. an unknown bidding zone): keep a short excerpt
                 detail = ""
                 if 400 <= response.status < 500:
                     detail = ": " + (await response.text(errors="replace"))[:200]
-                raise SourceConnectionError(f"{url}: HTTP {response.status}{detail}", response.status)
+                raise SourceConnectionError(f"{shown}: HTTP {response.status}{detail}", response.status)
             return HttpResult(await response.read(), last_modified)
     except TimeoutError as err:
-        raise SourceConnectionError(f"{url}: timeout after {timeout} s") from err
+        raise SourceConnectionError(f"{shown}: timeout after {timeout} s") from err
     except aiohttp.ClientError as err:
-        raise SourceConnectionError(f"{url}: {err}") from err
+        text = str(err)  # may repeat the URL (e.g. InvalidURL): then only the kind of error
+        raise SourceConnectionError(
+            f"{shown}: {text if '?' not in text and '@' not in text else type(err).__name__}"
+        ) from err
+
+
+def display_url(url: str) -> str:
+    """`url` without query, fragment and user/password: safe for logs and diagnostics."""
+    try:
+        parsed = URL(url)
+        return str(parsed.with_user(None).with_query(None).with_fragment(None))
+    except ValueError, TypeError:
+        return "<invalid URL>"
 
 
 def _retry_after(response: aiohttp.ClientResponse) -> float | None:
+    """The server's Retry-After in seconds, limited to 0..MAX_RETRY_AFTER_SECONDS (also "inf")."""
     try:
-        return float(response.headers["Retry-After"])
+        seconds = float(response.headers["Retry-After"])
     except KeyError, ValueError:
+        return None  # missing, or an HTTP date (not used by Energy-Charts)
+    if seconds != seconds:  # NaN
         return None
+    return min(max(seconds, 0.0), MAX_RETRY_AFTER_SECONDS)
 
 
 # --- Energy-Charts -------------------------------------------------------------------------------

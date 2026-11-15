@@ -30,12 +30,6 @@ DAYS = (1, 3, 5, 7, 10, 15, 20, 25)
 FIRST, LAST = (2022, 1), (2026, 10)
 
 
-def bounds(month: calc.Month) -> tuple[int, int]:
-    nxt = calc.shift_month(month, 1)
-    start = datetime(month[0], month[1], 1, tzinfo=VIENNA)
-    return int(start.timestamp()), int(datetime(nxt[0], nxt[1], 1, tzinfo=VIENNA).timestamp())
-
-
 async def download(cache: Path, months: list[calc.Month]) -> None:
     async with aiohttp.ClientSession() as session:
         client = sources.EnergyChartsClient(session)
@@ -43,7 +37,7 @@ async def download(cache: Path, months: list[calc.Month]) -> None:
             file = cache / f"{month[0]}-{month[1]:02d}.json"
             if file.exists():
                 continue
-            start, end = bounds(month)
+            start, end = calc.month_bounds(month, VIENNA)
             result = {}
             for name, fetch in (("gen", client.generation), ("price", client.price)):
                 for attempt in range(6):
@@ -85,7 +79,7 @@ def main() -> None:
         data[month] = ([tuple(x) for x in raw["gen"]], [tuple(x) for x in raw["price"]])
 
     def recomputed(month: calc.Month) -> tuple[float | None, float | None]:
-        start, end = bounds(month)
+        start, end = calc.month_bounds(month, VIENNA)
         value = calc.market_value(*data[month], start, end)
         level = calc.base_price(data[month][1], start, end)
         return (value.eur_per_mwh / 10 if value else None, level / 10 if level is not None else None)
@@ -99,9 +93,9 @@ def main() -> None:
     errors: dict[tuple[str, int], list[float]] = {(k, d): [] for k in methods for d in DAYS}
     evaluated = [m for m in months if calc.shift_month(m, -13) >= FIRST]
     for month in evaluated:
-        start, end = bounds(month)
+        start, end = calc.month_bounds(month, VIENNA)
         prev, last_year = calc.shift_month(month, -1), calc.shift_month(month, -12)
-        ly_start, ly_end = bounds(last_year)
+        ly_start, ly_end = calc.month_bounds(last_year, VIENNA)
         reference = calc.aggregate(data[last_year][0], ly_start, ly_end)
         for day in DAYS:
             midnight = int((datetime.fromtimestamp(start, VIENNA) + timedelta(days=day)).timestamp())
