@@ -1,0 +1,161 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Referenzmarktwert PV",
+        "description": "Berechnet den österreichischen Referenzmarktwert (§ 13 EAG) aus Energy-Charts-Daten (CC BY 4.0) und den offiziellen Werten der E-Control. Die Datenquellen sind voreingestellt; den Abschnitt nur öffnen, um sie zu ändern.",
+        "data": {
+          "deduction": "Abzug"
+        },
+        "data_description": {
+          "deduction": "Wird für die Vergütungs-Sensoren vom Marktwert abgezogen (Hofer Sonne: 0,015 EUR/kWh)."
+        },
+        "sections": {
+          "sources": {
+            "name": "Datenquellen",
+            "data": {
+              "energy_charts_url": "Energy-Charts-API-URL",
+              "generation_path": "Pfad Erzeugung",
+              "price_path": "Pfad Preise",
+              "country": "Land",
+              "bidding_zone": "Gebotszone",
+              "production_type": "Erzeugungsart",
+              "header_name": "Zusätzlicher HTTP-Header (Name)",
+              "header_value": "Zusätzlicher HTTP-Header (Wert)",
+              "econtrol_url": "URL der E-Control-Datei",
+              "econtrol_month_column": "Spalte Monat",
+              "econtrol_value_column": "Spalte Wert",
+              "econtrol_base_column": "Spalte Base-Preis",
+              "econtrol_published_column": "Spalte Veröffentlichungsdatum",
+              "time_zone": "Zeitzone",
+              "timeout": "Zeitlimit für Anfragen"
+            },
+            "data_description": {
+              "energy_charts_url": "Basis-URL der Energy-Charts-API.",
+              "generation_path": "Endpunkt für Erzeugungsdaten, relativ zur API-URL.",
+              "price_path": "Endpunkt für Day-Ahead-Preise, relativ zur API-URL.",
+              "country": "Energy-Charts-Ländercode für die Erzeugungsdaten, z. B. at.",
+              "bidding_zone": "Energy-Charts-Gebotszone für die Preise, z. B. AT.",
+              "production_type": "Name der Erzeugungsart in den Energy-Charts-Daten, z. B. Solar.",
+              "header_name": "Optional, z. B. für einen API-Schlüssel. Wird bei jeder Energy-Charts-Anfrage mitgeschickt.",
+              "header_value": "Wert des zusätzlichen Headers.",
+              "econtrol_url": "URL der E-Control-Verlaufsdatei mit den offiziellen Werten (xlsx).",
+              "econtrol_month_column": "Spalte des Monats in der E-Control-Datei.",
+              "econtrol_value_column": "Spalte des Werts der Technologie (D = Photovoltaik).",
+              "econtrol_base_column": "Spalte des Day-Ahead-Base-Preises (für die Schätzung). Leer: nicht verwendet.",
+              "econtrol_published_column": "Leer: nicht verwendet.",
+              "time_zone": "Monate werden in dieser Zeitzone gezählt."
+            }
+          }
+        }
+      },
+      "reconfigure": {
+        "title": "Datenquellen",
+        "data": {
+          "energy_charts_url": "Energy-Charts-API-URL",
+          "generation_path": "Pfad Erzeugung",
+          "price_path": "Pfad Preise",
+          "country": "Land",
+          "bidding_zone": "Gebotszone",
+          "production_type": "Erzeugungsart",
+          "header_name": "Zusätzlicher HTTP-Header (Name)",
+          "header_value": "Zusätzlicher HTTP-Header (Wert)",
+          "econtrol_url": "URL der E-Control-Datei",
+          "econtrol_month_column": "Spalte Monat",
+          "econtrol_value_column": "Spalte Wert",
+          "econtrol_base_column": "Spalte Base-Preis",
+          "econtrol_published_column": "Spalte Veröffentlichungsdatum",
+          "time_zone": "Zeitzone",
+          "timeout": "Zeitlimit für Anfragen"
+        },
+        "data_description": {
+          "energy_charts_url": "Basis-URL der Energy-Charts-API.",
+          "generation_path": "Endpunkt für Erzeugungsdaten, relativ zur API-URL.",
+          "price_path": "Endpunkt für Day-Ahead-Preise, relativ zur API-URL.",
+          "country": "Energy-Charts-Ländercode für die Erzeugungsdaten, z. B. at.",
+          "bidding_zone": "Energy-Charts-Gebotszone für die Preise, z. B. AT.",
+          "production_type": "Name der Erzeugungsart in den Energy-Charts-Daten, z. B. Solar.",
+          "header_name": "Optional, z. B. für einen API-Schlüssel. Wird bei jeder Energy-Charts-Anfrage mitgeschickt.",
+          "header_value": "Wert des zusätzlichen Headers.",
+          "econtrol_url": "URL der E-Control-Verlaufsdatei mit den offiziellen Werten (xlsx).",
+          "econtrol_month_column": "Spalte des Monats in der E-Control-Datei.",
+          "econtrol_value_column": "Spalte des Werts der Technologie (D = Photovoltaik).",
+          "econtrol_base_column": "Spalte des Day-Ahead-Base-Preises (für die Schätzung). Leer: nicht verwendet.",
+          "econtrol_published_column": "Leer: nicht verwendet.",
+          "time_zone": "Monate werden in dieser Zeitzone gezählt."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Keine Verbindung: {error}",
+      "invalid_setting": "Die Quelle hat eine Einstellung abgelehnt: {error}",
+      "invalid_data": "Unerwartete Daten von der Quelle: {error}",
+      "rate_limited": "Energy-Charts bittet um weniger Anfragen, in einer Minute nochmal versuchen: {error}",
+      "invalid_time_zone": "Unbekannte Zeitzone"
+    },
+    "abort": {
+      "already_configured": "Diese Datenreihe ist bereits eingerichtet.",
+      "reconfigure_successful": "Datenquellen aktualisiert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Berechnung und Abfrage",
+        "data": {
+          "deduction": "Abzug",
+          "prior_method": "Schätzung für den Rest des Monats",
+          "aggregation_seconds": "Aggregationszeitraum",
+          "update_interval_minutes": "Aktualisierungsintervall",
+          "official_interval_hours": "Offizielle Werte: Prüfintervall",
+          "official_early_interval_hours": "Offizielle Werte: Prüfintervall bis zur Veröffentlichung",
+          "request_delay_seconds": "Pause zwischen Anfragen"
+        },
+        "data_description": {
+          "deduction": "Wird für die Vergütungs-Sensoren vom Marktwert abgezogen (Hofer Sonne: 0,015 EUR/kWh).",
+          "prior_method": "Wie der noch unbekannte Teil des Monats geschätzt wird.",
+          "aggregation_seconds": "E-Control gewichtet Stundenwerte (3600 s). 900 s nur zum Vergleich.",
+          "update_interval_minutes": "Wie oft Energy-Charts nach neuen Daten gefragt wird.",
+          "official_interval_hours": "Wie oft die E-Control-Datei heruntergeladen wird.",
+          "official_early_interval_hours": "Gilt bis zum 10., solange der Wert des Vormonats noch nicht veröffentlicht ist.",
+          "request_delay_seconds": "Energy-Charts begrenzt, wie oft es abgefragt werden darf."
+        }
+      }
+    }
+  },
+  "selector": {
+    "prior_method": {
+      "options": {
+        "base_x_capture_rate": "Base-Preis × Capture-Rate des Vorjahres (empfohlen)",
+        "previous_month": "Wert des Vormonats"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "estimate": {
+        "name": "Schätzung laufender Monat"
+      },
+      "payout_estimate": {
+        "name": "Vergütung Schätzung laufender Monat"
+      },
+      "official": {
+        "name": "Offizieller Wert"
+      },
+      "payout_official": {
+        "name": "Vergütung offizieller Wert"
+      }
+    }
+  },
+  "exceptions": {
+    "rate_limited": {
+      "message": "Anfragelimit von Energy-Charts erreicht: {error}"
+    },
+    "energy_charts_failed": {
+      "message": "Energy-Charts-Daten nicht verfügbar: {error}"
+    },
+    "invalid_time_zone": {
+      "message": "Unbekannte Zeitzone {time_zone}"
+    }
+  }
+}

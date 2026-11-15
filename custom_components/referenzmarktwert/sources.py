@@ -84,7 +84,11 @@ async def _get(
             if response.status == 429:
                 raise SourceRateLimitError(f"{url}: rate limited (HTTP 429)", _retry_after(response))
             if response.status != 200:
-                raise SourceConnectionError(f"{url}: HTTP {response.status}", response.status)
+                # 4xx bodies explain what was wrong (e.g. an unknown bidding zone): keep a short excerpt
+                detail = ""
+                if 400 <= response.status < 500:
+                    detail = ": " + (await response.text(errors="replace"))[:200]
+                raise SourceConnectionError(f"{url}: HTTP {response.status}{detail}", response.status)
             return await response.read()
     except TimeoutError as err:
         raise SourceConnectionError(f"{url}: timeout after {timeout} s") from err
@@ -156,6 +160,9 @@ def parse_price(payload: Any) -> list[tuple[int, float | None]]:
     return _paired(payload, payload.get("price"), "price")
 
 
+NO_CONTENT = "no content available"  # Energy-Charts' 404 body for a window without data
+
+
 class EnergyChartsClient:
     """Async client for the two Energy-Charts endpoints we need."""
 
@@ -163,14 +170,21 @@ class EnergyChartsClient:
         self._session = session
         self.config = config or EnergyChartsConfig()
 
-    async def _fetch(self, path: str, params: dict[str, str | int], what: str) -> Any:
-        body = await _get(
-            self._session,
-            self.config.base_url.rstrip("/") + path,
-            params=params,
-            headers=self.config.headers,
-            timeout=self.config.timeout,
-        )
+    async def _fetch(self, path: str, params: dict[str, str | int], what: str) -> Any | None:
+        """The JSON answer, or None if the window holds no data yet (HTTP 404 "no content available")."""
+        try:
+            body = await _get(
+                self._session,
+                self.config.base_url.rstrip("/") + path,
+                params=params,
+                headers=self.config.headers,
+                timeout=self.config.timeout,
+            )
+        except SourceConnectionError as err:
+            # e.g. the first hours of a month: not an error. Any other 404 (wrong path) still is.
+            if err.status == 404 and NO_CONTENT in str(err):
+                return None
+            raise
         return _json(body, what)
 
     async def generation(self, start: int, end: int) -> list[tuple[int, float | None]]:
@@ -180,7 +194,7 @@ class EnergyChartsClient:
             {"country": self.config.country, "start": start, "end": end},
             "public_power",
         )
-        return parse_generation(payload, self.config.production_type)
+        return [] if payload is None else parse_generation(payload, self.config.production_type)
 
     async def price(self, start: int, end: int) -> list[tuple[int, float | None]]:
         """Day-ahead prices of the configured bidding zone, quarter-hourly, EUR/MWh. `end` inclusive."""
@@ -189,7 +203,7 @@ class EnergyChartsClient:
             {"bzn": self.config.bidding_zone, "start": start, "end": end},
             "price",
         )
-        return parse_price(payload)
+        return [] if payload is None else parse_price(payload)
 
 
 # --- E-Control -----------------------------------------------------------------------------------

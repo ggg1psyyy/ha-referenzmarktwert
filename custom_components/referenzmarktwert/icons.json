@@ -1,0 +1,10 @@
+{
+  "entity": {
+    "sensor": {
+      "estimate": { "default": "mdi:solar-power-variant" },
+      "payout_estimate": { "default": "mdi:cash-plus" },
+      "official": { "default": "mdi:certificate-outline" },
+      "payout_official": { "default": "mdi:cash-check" }
+    }
+  }
+}

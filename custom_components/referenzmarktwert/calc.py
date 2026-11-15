@@ -15,6 +15,7 @@ quarter-hour prices, the generation the mean power (MW) over the period = its en
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import datetime, tzinfo
 from statistics import fmean
 
 from .const import DEFAULT_AGGREGATION_SECONDS, DEFAULT_PRIOR_METHOD, KWH_PER_MWH, PriorMethod
@@ -124,6 +125,31 @@ def shift_month(month: Month, delta: int) -> Month:
     """Month `delta` months after `month` (negative = before)."""
     index = month[0] * 12 + month[1] - 1 + delta
     return index // 12, index % 12 + 1
+
+
+def month_bounds(month: Month, tz: tzinfo) -> tuple[int, int]:
+    """[start, end) of a calendar month in time zone `tz`, as Unix seconds (DST-safe)."""
+    following = shift_month(month, 1)
+    start = datetime(month[0], month[1], 1, tzinfo=tz)
+    end = datetime(following[0], following[1], 1, tzinfo=tz)
+    return int(start.timestamp()), int(end.timestamp())
+
+
+def month_of(ts: float, tz: tzinfo) -> Month:
+    """The calendar month (in time zone `tz`) that contains Unix time `ts`."""
+    local = datetime.fromtimestamp(ts, tz)
+    return local.year, local.month
+
+
+def covered_until(series: Series, step: int) -> int | None:
+    """End of the latest point that has a value: its timestamp + `step` (the point's duration)."""
+    stamps = [ts for ts, value in series if value is not None]
+    return max(stamps) + step if stamps else None
+
+
+def floor_to(ts: int, period: int) -> int:
+    """`ts` rounded down to a multiple of `period` (e.g. the start of the hour)."""
+    return ts - ts % period
 
 
 def base_price(price: Series, start: int, end: int, period: int = DEFAULT_AGGREGATION_SECONDS) -> float | None:

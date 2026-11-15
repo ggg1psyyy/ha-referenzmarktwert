@@ -1,7 +1,7 @@
 # Referenzmarktwert PV — Home Assistant integration
 
-> **Status: early development — not installable yet.**
-> Only the calculation core exists. There is no Home Assistant integration (config flow, sensors, statistics) yet.
+> **Status: early development — no release yet.**
+> The sensors work; the Energy Dashboard compensation statistic is not implemented yet.
 
 A custom [Home Assistant](https://www.home-assistant.io/) integration (to be installed via HACS) that computes the
 Austrian **reference market value** (*Referenzmarktwert*, § 13 EAG) of the running month from public data, and values
@@ -10,7 +10,7 @@ grid export with it for the Energy Dashboard. Many Austrian feed-in tariffs are 
 
 ## Installation
 
-> Not functional yet — the integration part does not exist so far. The steps below describe how it will be installed.
+> There is no release yet; until then the Marketplace installs the default branch.
 
 ### Via the Marketplace (recommended, Home Assistant 2026.11+)
 
@@ -40,6 +40,37 @@ Home Assistant configuration directory, then restart Home Assistant.
 
 Or: **Settings** → **Devices & services** → **Add integration** → search for **Referenzmarktwert PV**.
 
+The setup asks only for the **deduction** (EUR/kWh, subtracted for the payout sensors; Hofer "Sonne": 0.015). All data
+sources are preset for Austrian photovoltaics and sit in a collapsed **Data sources** section; every setting is tried
+against the real sources before it is saved.
+
+## Sensors
+
+All values in **EUR/kWh**.
+
+| Sensor | Value | Main attributes |
+|---|---|---|
+| Estimate running month | expected reference market value of the running month | `month`, `month_so_far`, `known_share`, `prior`, `previous_month` (+ `_source`: official/recomputed), `generation_until`, `prices_until`, `method` |
+| Payout estimate running month | estimate − deduction (the expected feed-in price) | `month`, `deduction` |
+| Official value | latest value published by E-Control | `month`, `published`, `base_price`, `checked`, `history` (all months; not stored in the database) |
+| Payout official value | official value − deduction | `month`, `deduction` |
+
+## Settings
+
+| Where | Setting | Default |
+|---|---|---|
+| Setup, **Configure** | Deduction | 0.015 EUR/kWh |
+| **Configure** | Estimate for the rest of the month | base price × last year's capture rate |
+| | Aggregation period | 3600 s (as E-Control) |
+| | Update interval (Energy-Charts) | 60 min |
+| | Official values: check interval / while awaited (until the 10th) | 24 h / 3 h |
+| | Pause between Energy-Charts requests | 1 s |
+| Setup section *Data sources*, **Reconfigure** | Energy-Charts API URL, generation and price paths | `https://api.energy-charts.info`, `/public_power`, `/price` |
+| | Country, bidding zone, generation type | `at`, `AT`, `Solar` |
+| | Extra HTTP header for Energy-Charts (name, value — e.g. an API key) | none |
+| | E-Control file URL; month, value, base price and publication date columns | E-Control's `Referenzmarktwert_Entwicklung.xlsx`; A, D, E, F |
+| | Time zone (months are counted in it), request timeout | Europe/Vienna, 30 s |
+
 ## Developed with Claude
 
 This project is developed with the help of **Claude** (Anthropic's AI assistant, via Claude Code): code, tests and
@@ -51,9 +82,9 @@ documentation are written by Claude and reviewed by the maintainer. Commits are 
 |---|---|
 | Calculation (`calc.py`): hourly aggregation, generation-weighted mean, month estimate (prior + blend), payout | done, tested |
 | Data sources (`sources.py`): Energy-Charts client, E-Control history file parser | done, tested |
-| HA integration: config flow, coordinator, sensors | not started |
+| HA integration: setup/reconfigure/options flows, coordinator, sensors, diagnostics | done, tested |
 | Energy Dashboard compensation statistic, backfill, services | not started |
-| HACS release, CI | not started |
+| Release, CI (hassfest, Marketplace/HACS validation, tests) | not started |
 
 ### How the value is calculated
 

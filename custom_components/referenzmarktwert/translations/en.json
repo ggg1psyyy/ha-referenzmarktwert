@@ -1,0 +1,161 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Referenzmarktwert PV",
+        "description": "Calculates the Austrian reference market value (§ 13 EAG) from Energy-Charts data (CC BY 4.0) and E-Control's official values. The data sources are preset; open the section only to change them.",
+        "data": {
+          "deduction": "Deduction"
+        },
+        "data_description": {
+          "deduction": "Subtracted from the market value for the payout sensors (Hofer Sonne: 0.015 EUR/kWh)."
+        },
+        "sections": {
+          "sources": {
+            "name": "Data sources",
+            "data": {
+              "energy_charts_url": "Energy-Charts API URL",
+              "generation_path": "Generation path",
+              "price_path": "Price path",
+              "country": "Country",
+              "bidding_zone": "Bidding zone",
+              "production_type": "Generation type",
+              "header_name": "Extra HTTP header (name)",
+              "header_value": "Extra HTTP header (value)",
+              "econtrol_url": "E-Control file URL",
+              "econtrol_month_column": "Month column",
+              "econtrol_value_column": "Value column",
+              "econtrol_base_column": "Base price column",
+              "econtrol_published_column": "Publication date column",
+              "time_zone": "Time zone",
+              "timeout": "Request timeout"
+            },
+            "data_description": {
+              "energy_charts_url": "Base URL of the Energy-Charts API.",
+              "generation_path": "Endpoint for generation data, relative to the API URL.",
+              "price_path": "Endpoint for day-ahead prices, relative to the API URL.",
+              "country": "Energy-Charts country code for the generation data, e.g. at.",
+              "bidding_zone": "Energy-Charts bidding zone for the prices, e.g. AT.",
+              "production_type": "Name of the generation type in the Energy-Charts data, e.g. Solar.",
+              "header_name": "Optional, e.g. for an API key. Sent with every Energy-Charts request.",
+              "header_value": "Value of the extra header.",
+              "econtrol_url": "URL of E-Control's history file of the official values (xlsx).",
+              "econtrol_month_column": "Column of the month in the E-Control file.",
+              "econtrol_value_column": "Column of the technology's value (D = photovoltaics).",
+              "econtrol_base_column": "Column of the day-ahead base price (for the estimate). Empty: not used.",
+              "econtrol_published_column": "Empty: not used.",
+              "time_zone": "Months are counted in this time zone."
+            }
+          }
+        }
+      },
+      "reconfigure": {
+        "title": "Data sources",
+        "data": {
+          "energy_charts_url": "Energy-Charts API URL",
+          "generation_path": "Generation path",
+          "price_path": "Price path",
+          "country": "Country",
+          "bidding_zone": "Bidding zone",
+          "production_type": "Generation type",
+          "header_name": "Extra HTTP header (name)",
+          "header_value": "Extra HTTP header (value)",
+          "econtrol_url": "E-Control file URL",
+          "econtrol_month_column": "Month column",
+          "econtrol_value_column": "Value column",
+          "econtrol_base_column": "Base price column",
+          "econtrol_published_column": "Publication date column",
+          "time_zone": "Time zone",
+          "timeout": "Request timeout"
+        },
+        "data_description": {
+          "energy_charts_url": "Base URL of the Energy-Charts API.",
+          "generation_path": "Endpoint for generation data, relative to the API URL.",
+          "price_path": "Endpoint for day-ahead prices, relative to the API URL.",
+          "country": "Energy-Charts country code for the generation data, e.g. at.",
+          "bidding_zone": "Energy-Charts bidding zone for the prices, e.g. AT.",
+          "production_type": "Name of the generation type in the Energy-Charts data, e.g. Solar.",
+          "header_name": "Optional, e.g. for an API key. Sent with every Energy-Charts request.",
+          "header_value": "Value of the extra header.",
+          "econtrol_url": "URL of E-Control's history file of the official values (xlsx).",
+          "econtrol_month_column": "Column of the month in the E-Control file.",
+          "econtrol_value_column": "Column of the technology's value (D = photovoltaics).",
+          "econtrol_base_column": "Column of the day-ahead base price (for the estimate). Empty: not used.",
+          "econtrol_published_column": "Empty: not used.",
+          "time_zone": "Months are counted in this time zone."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect: {error}",
+      "invalid_setting": "The source rejected a setting: {error}",
+      "invalid_data": "Unexpected data from the source: {error}",
+      "rate_limited": "Energy-Charts asks to slow down, try again in a minute: {error}",
+      "invalid_time_zone": "Unknown time zone"
+    },
+    "abort": {
+      "already_configured": "This data series is already set up.",
+      "reconfigure_successful": "Data sources updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Calculation and polling",
+        "data": {
+          "deduction": "Deduction",
+          "prior_method": "Estimate for the rest of the month",
+          "aggregation_seconds": "Aggregation period",
+          "update_interval_minutes": "Update interval",
+          "official_interval_hours": "Official values: check interval",
+          "official_early_interval_hours": "Official values: check interval while awaited",
+          "request_delay_seconds": "Pause between requests"
+        },
+        "data_description": {
+          "deduction": "Subtracted from the market value for the payout sensors (Hofer Sonne: 0.015 EUR/kWh).",
+          "prior_method": "How the not yet known part of the month is estimated.",
+          "aggregation_seconds": "E-Control weights hourly values (3600 s). 900 s only for comparison.",
+          "update_interval_minutes": "How often Energy-Charts is asked for new data.",
+          "official_interval_hours": "How often the E-Control file is downloaded.",
+          "official_early_interval_hours": "Used until the 10th while last month's value is not published yet.",
+          "request_delay_seconds": "Energy-Charts limits how often it may be asked."
+        }
+      }
+    }
+  },
+  "selector": {
+    "prior_method": {
+      "options": {
+        "base_x_capture_rate": "Base price × last year's capture rate (recommended)",
+        "previous_month": "Previous month's value"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "estimate": {
+        "name": "Estimate running month"
+      },
+      "payout_estimate": {
+        "name": "Payout estimate running month"
+      },
+      "official": {
+        "name": "Official value"
+      },
+      "payout_official": {
+        "name": "Payout official value"
+      }
+    }
+  },
+  "exceptions": {
+    "rate_limited": {
+      "message": "Energy-Charts rate limit reached: {error}"
+    },
+    "energy_charts_failed": {
+      "message": "Energy-Charts data not available: {error}"
+    },
+    "invalid_time_zone": {
+      "message": "Unknown time zone {time_zone}"
+    }
+  }
+}

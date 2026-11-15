@@ -95,11 +95,48 @@ tests/             # pytest, recorded responses as fixtures
   month (until official) are rewritten per update; `rebuild_statistics` and `set_official` services.
 - **Python ≥ 3.14.2**, because that is what the current Home Assistant (2026.11) requires.
 
+### Home Assistant integration (milestone 3)
+
+- Built against Home Assistant 2026.10.4 — the newest version the test plugin (pytest-homeassistant-custom-component
+  0.13.375) supports; `hacs.json` requires ≥ 2026.10.0. Patterns that only exist from 2026.11
+  (`async_setup_entry` returning `None`, `async_unload_platforms_or_raise`) are not used; the classic forms work in
+  both. Manifest keys follow hassfest's schema of that version (no `categories`/`connectivity`).
+- Modelled on the core **Nord Pool** integration (a platinum price integration): typed `runtime_data`, coordinator
+  with `config_entry=`, `_async_setup` for one-time work (loading the time zone file asynchronously), entity
+  descriptions with `value_fn`, `has_entity_name` + translation keys, a service device, `PARALLEL_UPDATES = 0`.
+- **Estimate orchestration is pure** (`estimate.py`): the coordinator only fetches and caches. Only *complete* hours
+  of generation are used (a partial latest hour would get an incomplete mean); prices are known until the last
+  returned quarter-hour (Energy-Charts truncates future requests, no nulls).
+- **Request budget** (Energy-Charts rate-limits): sequential requests with a configurable pause; the reference month
+  (last year) is fetched once, the recomputed previous month once a day until E-Control publishes it, the official
+  file daily (every 3 h until the 10th while last month is awaited). A normal update = 2 requests. HTTP 429 →
+  `UpdateFailed(retry_after=…)`.
+- **E-Control outage does not take the estimate down**: the last table is kept, logged once when it starts failing
+  and once when it recovers; without any table the estimate uses the month so far and the official sensors are
+  unknown.
+- **Settings split**: `entry.data` = data sources (setup section, *Reconfigure*; re-validated against the real sources,
+  unique ID = country + bidding zone + generation type + E-Control column, so several series can coexist);
+  `entry.options` = deduction, method, aggregation, intervals (*Configure*, `OptionsFlowWithReload`). Invalid
+  settings are told apart from connection problems by the HTTP status (Energy-Charts answers 400 for an unknown
+  zone/country).
+- Price sensors: `EUR/kWh`, state class measurement, no device class (monetary only allows `total`); the month table
+  attribute is excluded from the recorder. Diagnostics redact the optional header value.
+- Brand image in `custom_components/referenzmarktwert/brand/` (supported since HA 2026.3), drawn by
+  `tools/make_icon.py`.
+- hassfest could not be run locally (it executes HA core's scripts); it will run in CI.
+- **Schemas use `probatio`**, not `voluptuous`: Home Assistant 2026.10 replaced voluptuous (all core flows import
+  probatio, `homeassistant` only requires `probatio`; voluptuous is merely pulled in by test tools). A test runs all
+  three forms through the serializer of HA's flow HTTP views (`probatio.to_field_list`).
+- Energy-Charts answers **HTTP 404 "no content available"** for a window without data (e.g. the first hours of a
+  month): treated as an empty series; any other 404 (wrong path) stays an error. The setup validation therefore asks
+  for windows that certainly hold data (generation 2 days ago, prices of the last day).
+- A failed E-Control download is retried on every update until it works (one failure at startup must not hide the
+  official values for a day).
+
 ### Open points
 
-- With live data the latest hour may have fewer than four quarter-hours — decide whether to drop incomplete hours.
-- Once the package `__init__.py` imports Home Assistant, the pure tests need HA installed
-  (pytest-homeassistant-custom-component) — acceptable, or move the pure code.
+- Once the package `__init__.py` imports Home Assistant, the pure tests need HA installed — accepted: the test plugin
+  installs it anyway.
 
 ## Backtests of the estimate (2026-11-15)
 
@@ -160,3 +197,4 @@ better mid-month, worse early, not adopted.
   old `hacs_repository` link redirects). README installation rewritten. Tests now run on Home Assistant's test plugin
   (pytest-homeassistant-custom-component, newest release pins HA 2026.10.4), which blocks sockets: the local test
   server uses `socket_enabled`, the live tests an `internet` fixture.
+- 2026-11-15 — Milestone 3: Home Assistant integration (flows, coordinator, sensors, diagnostics, brand icon).

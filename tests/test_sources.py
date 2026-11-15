@@ -4,6 +4,7 @@ Parsers run on recorded responses; the HTTP client runs against a local aiohttp 
 network is needed. `test_live_*` talk to the real APIs and only run with RMW_LIVE=1.
 """
 
+import asyncio
 import io
 import json
 import os
@@ -266,3 +267,16 @@ def test_parse_xlsx_bad_shared_string_index() -> None:
             z.writestr(name, data)
     with pytest.raises(SourceDataError):
         sources.parse_econtrol_xlsx(buffer.getvalue())
+
+
+async def test_client_no_content_is_empty(aioclient_mock) -> None:
+    """Energy-Charts answers 404 'no content available' for a window without data (month start)."""
+    aioclient_mock.get("https://ec.test/price", status=404, text="no content available")
+    aioclient_mock.get("https://ec.test/public_power", status=404, text="Not Found")
+    session = aioclient_mock.create_session(asyncio.get_running_loop())
+    client = EnergyChartsClient(session, EnergyChartsConfig(base_url="https://ec.test"))
+    assert await client.price(1, 2) == []
+    with pytest.raises(SourceConnectionError) as caught:  # a wrong path stays an error
+        await client.generation(1, 2)
+    assert caught.value.status == 404
+    await session.close()
