@@ -4,6 +4,7 @@ Everything here is a *default*: the config/options flow lets the user override e
 This module must stay free of Home Assistant imports so the pure modules (calc, sources) can use it.
 """
 
+from enum import StrEnum
 from typing import Final
 
 DOMAIN: Final = "referenzmarktwert"
@@ -16,6 +17,25 @@ DEFAULT_AGGREGATION_SECONDS: Final = 3600
 # All prices are in the main currency unit (EUR), as Home Assistant's Energy Dashboard requires.
 DEFAULT_DEDUCTION_EUR_PER_KWH: Final = 0.015
 
+
+
+class PriorMethod(StrEnum):
+    """How the not-yet-known rest of the month is estimated (the "prior" of the blend).
+
+    Backtest on E-Control's monthly history 2023-02..2026-10 (RMSE, ct/kWh):
+    BASE_X_CAPTURE_RATE 2.17, PREVIOUS_MONTH 2.67, SEASONAL_DIFFERENCE 6.39. See ARCHITECTURE.md.
+    """
+
+    # previous month's base price x the same calendar month's PV/base ratio last year
+    BASE_X_CAPTURE_RATE = "base_x_capture_rate"
+    # previous month's PV value as is
+    PREVIOUS_MONTH = "previous_month"
+    # previous month's PV value + last year's change from that month to this one
+    SEASONAL_DIFFERENCE = "seasonal_difference"
+
+
+DEFAULT_PRIOR_METHOD: Final = PriorMethod.BASE_X_CAPTURE_RATE
+
 # --- Energy-Charts (Fraunhofer ISE), data licensed CC BY 4.0 ---------------------------------
 DEFAULT_ENERGY_CHARTS_BASE_URL: Final = "https://api.energy-charts.info"
 DEFAULT_COUNTRY: Final = "at"
@@ -27,6 +47,7 @@ DEFAULT_ECONTROL_XLSX_URL: Final = (
     "https://www.e-control.at/documents/1785851/10823410/Referenzmarktwert_Entwicklung.xlsx"
 )
 DEFAULT_ECONTROL_COLUMN: Final = "D"  # B hydro, C wind, D photovoltaics
+DEFAULT_ECONTROL_BASE_COLUMN: Final = "E"  # Referenzmarktpreis (day-ahead base), for the capture rate
 
 # --- Time --------------------------------------------------------------------------------------
 DEFAULT_TIME_ZONE: Final = "Europe/Vienna"  # months are assigned in this zone

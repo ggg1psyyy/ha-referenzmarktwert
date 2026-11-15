@@ -17,10 +17,13 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from statistics import fmean
 
-from .const import DEFAULT_AGGREGATION_SECONDS, KWH_PER_MWH
+from .const import DEFAULT_AGGREGATION_SECONDS, DEFAULT_PRIOR_METHOD, KWH_PER_MWH, PriorMethod
 
 # A time series as (unix_seconds, value) pairs. value may be None (missing data point).
 type Series = Iterable[tuple[int, float | None]]
+
+# A calendar month as (year, month), e.g. (2026, 10). Tuples compare and hash naturally.
+type Month = tuple[int, int]
 
 
 def aggregate(
@@ -117,6 +120,38 @@ def elapsed_share(
         return None
     done = sum(v for ts, v in reference.items() if ts - reference_start < elapsed)
     return min(1.0, max(0.0, done / total))
+
+
+def shift_month(month: Month, delta: int) -> Month:
+    """Month `delta` months after `month` (negative = before)."""
+    index = month[0] * 12 + month[1] - 1 + delta
+    return index // 12, index % 12 + 1
+
+
+def prior(
+    month: Month,
+    pv: Mapping[Month, float],
+    base: Mapping[Month, float],
+    method: PriorMethod = DEFAULT_PRIOR_METHOD,
+) -> float | None:
+    """Estimate a whole month's value from earlier months only (the blend's "prior").
+
+    `pv` maps months to the technology's reference market value, `base` to the day-ahead base
+    price, both in the same unit. If the chosen method lacks data, it falls back to the previous
+    month's value; None if even that is missing.
+    """
+    prev, last_year, last_year_prev = (shift_month(month, d) for d in (-1, -12, -13))
+    fallback = pv.get(prev)
+    match method:
+        case PriorMethod.BASE_X_CAPTURE_RATE:
+            if prev in base and last_year in pv and base.get(last_year):
+                return base[prev] * pv[last_year] / base[last_year]
+        case PriorMethod.SEASONAL_DIFFERENCE:
+            if fallback is not None and last_year in pv and last_year_prev in pv:
+                return fallback + pv[last_year] - pv[last_year_prev]
+        case PriorMethod.PREVIOUS_MONTH:
+            pass
+    return fallback
 
 
 def blend(

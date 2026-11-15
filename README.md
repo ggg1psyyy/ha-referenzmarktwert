@@ -44,7 +44,7 @@ documentation are written by Claude and reviewed by the maintainer. Commits are 
 
 | Part | State |
 |---|---|
-| Calculation (`calc.py`): hourly aggregation, generation-weighted mean, month blend, payout | done, tested |
+| Calculation (`calc.py`): hourly aggregation, generation-weighted mean, month estimate (prior + blend), payout | done, tested |
 | Data sources (Energy-Charts client, E-Control history file) | not started |
 | HA integration: config flow, coordinator, sensors | not started |
 | Energy Dashboard compensation statistic, backfill, services | not started |
@@ -63,9 +63,16 @@ data for September and October 2026 this reproduces the official E-Control value
 All prices are in **EUR/kWh** (E-Control publishes ct/kWh; 17.71 ct/kWh = 0.1771 EUR/kWh), because Home Assistant's
 Energy Dashboard books prices in the main currency unit.
 
-All parameters (aggregation period, deduction, data source URLs, country, bidding zone, generation type, time zone)
-have defaults in `custom_components/referenzmarktwert/const.py` and are passed in as parameters, so they can be made
-user-configurable.
+### Estimate of the running month
+
+The month so far is blended with a prior for the rest of the month, weighted by the share of the month's expected PV
+energy already passed. Default prior: the previous month's day-ahead base price × the PV/base ratio ("capture rate")
+of the same calendar month last year. Alternatives: the previous month's value as is, or the previous month plus last
+year's month-to-month change.
+
+All parameters (aggregation period, deduction, prior method, data source URLs, country, bidding zone, generation type,
+time zone) have defaults in `custom_components/referenzmarktwert/const.py` and are passed in as parameters, so they can
+be made user-configurable.
 
 ## Development
 
@@ -83,8 +90,9 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for design decisions and their reasons.
 
 - **Energy-Charts** (Fraunhofer ISE), https://energy-charts.info — generation and day-ahead price data, licensed
   [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (price data originally from Bundesnetzagentur | SMARD.de).
-  The test fixtures in `tests/fixtures/` are recorded Energy-Charts responses.
+  `tests/fixtures/public_power_*.json` and `price_*.json` are recorded Energy-Charts responses.
 - **E-Control**, https://www.e-control.at/referenzmarktwert — official monthly reference market values.
+  `tests/fixtures/econtrol_monthly.json` is an extract of E-Control's published history (PV and base price).
 
 This project is not affiliated with Fraunhofer ISE, E-Control or any electricity supplier.
 

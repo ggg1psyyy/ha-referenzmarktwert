@@ -66,10 +66,14 @@ tests/             # pytest, recorded responses as fixtures
   (sensors, deduction setting, statistics) is in EUR/kWh. Reason: the Energy Dashboard only checks that a price
   unit ends in `/kWh` (or another energy unit) and multiplies it by energy into the instance currency — a `ct/kWh`
   sensor would pass validation but book costs 100x too high. E-Control's ct/kWh values are converted on import.
-- **Whole-month estimate** = month so far, blended with the previous month's official value; the weight is the share
+- **Whole-month estimate** = month so far, blended with a *prior* for the rest of the month; the weight is the share
   of the month's *expected PV energy* already passed (reference: the same month last year). Weighted by PV energy, not
   days. If the share is unknown (reference data missing) the month so far is used as is — real data is never
   discarded. The elapsed time is taken from the latest data point, not the wall clock (generation lags ~2 h).
+- **Prior = previous month's base price × last year's capture rate of this calendar month** (capture rate = PV value /
+  day-ahead base price, both from the E-Control file). Configurable (`PriorMethod`); alternatives: previous month as
+  is, previous month + last year's month-to-month change. Falls back to the previous month if data is missing.
+  See "Backtest of the prior" below.
 - **Official value wins.** Once E-Control publishes a month, it replaces the estimate for good.
 - **Statistics:** hours in UTC, months assigned in `Europe/Vienna` (DST-safe); only the running month and the previous
   month (until official) are rewritten per update; `rebuild_statistics` and `set_official` services.
@@ -81,6 +85,30 @@ tests/             # pytest, recorded responses as fixtures
 - Once the package `__init__.py` imports Home Assistant, the pure tests need HA installed
   (pytest-homeassistant-custom-component) — acceptable, or move the pure code.
 
+## Backtest of the prior (2026-11-15)
+
+Each month 2023-02..2026-10 (n = 45) predicted from earlier months only, compared with the official PV value
+(ct/kWh; 2022 used as input only). `tests/test_calc.py::test_backtest_default_prior_beats_alternatives` pins it.
+
+| Method | MAE | RMSE | max |
+|---|---|---|---|
+| previous month as is | 2.03 | 2.67 | 7.18 |
+| same month last year | 6.79 | 10.80 | 40.29 |
+| previous month + last year's month-to-month change | 4.25 | 6.39 | 23.46 |
+| previous month × last year's month-to-month ratio | 2.83 | 4.02 | 13.52 |
+| **previous base × last year's capture rate (default)** | 1.74 | **2.17** | **4.41** |
+| previous base + last year's (PV − base) spread | **1.62** | 2.21 | 5.93 |
+
+Same ranking for 2024+ and 2025+. Why: month-to-month changes are dominated by the general price level, which does not
+repeat yearly (e.g. October: +0.44, +0.33, +4.01, +7.18 ct in 2023–2026). The **capture rate** is seasonal and drifts
+slowly with PV build-out (April: 0.90, 0.82, 0.53, 0.32, 0.20 in 2022–2026), so the level comes from the latest month
+and the seasonal PV discount from last year. Multiplicative, so it scales with the price level. Small sample and a
+market in transition — the margins (0.3–0.5 ct) are indicative, not proof.
+
+To test once hourly data is available (milestone 2): use the *running* month's base price so far (day-ahead known up
+to tomorrow) instead of the previous month's. The prior matters mainly in days 1–10, before the previous month's
+official value is published; until then the previous month (PV and base) is recomputed from Energy-Charts.
+
 ## History
 
 - 2026-11-15 — Milestone 1: `calc.py` + tests; reproduces the official Sep/Oct 2026 values from recorded
@@ -88,3 +116,4 @@ tests/             # pytest, recorded responses as fixtures
 - 2026-11-15 — MIT license; README installation section (HACS custom repository, My Home Assistant links) written
   ahead of the integration itself.
 - 2026-11-15 — Switched all prices and the deduction default from ct/kWh to EUR/kWh (0.015 EUR/kWh).
+- 2026-11-15 — Prior for the month estimate: backtested methods, default base × capture rate (`PriorMethod`).

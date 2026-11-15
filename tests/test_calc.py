@@ -103,3 +103,49 @@ def test_payout() -> None:
 
 def test_eur_per_kwh_conversion() -> None:
     assert calc.WeightedValue(177.1, 1.0, 1, 0).eur_per_kwh == pytest.approx(0.1771)
+
+
+# --- Prior (estimate of the not-yet-known rest of the month) -------------------------------------
+
+PriorMethod = calc.PriorMethod
+
+
+def test_shift_month() -> None:
+    assert calc.shift_month((2026, 1), -1) == (2025, 12)
+    assert calc.shift_month((2026, 12), 1) == (2027, 1)
+    assert calc.shift_month((2026, 10), -13) == (2025, 9)
+
+
+def test_prior_methods() -> None:
+    pv = {(2025, 9): 4.0, (2025, 10): 8.0, (2026, 9): 10.0}
+    base = {(2025, 10): 10.0, (2026, 9): 20.0}
+    month = (2026, 10)
+    assert calc.prior(month, pv, base, PriorMethod.PREVIOUS_MONTH) == 10.0
+    assert calc.prior(month, pv, base, PriorMethod.SEASONAL_DIFFERENCE) == 10.0 + 8.0 - 4.0
+    assert calc.prior(month, pv, base, PriorMethod.BASE_X_CAPTURE_RATE) == 20.0 * 8.0 / 10.0
+    assert calc.prior(month, pv, base) == 16.0  # default method
+
+
+def test_prior_falls_back_to_previous_month() -> None:
+    pv = {(2026, 9): 10.0}
+    assert calc.prior((2026, 10), pv, {}, PriorMethod.BASE_X_CAPTURE_RATE) == 10.0
+    assert calc.prior((2026, 10), pv, {}, PriorMethod.SEASONAL_DIFFERENCE) == 10.0
+    assert calc.prior((2026, 10), {}, {}) is None
+
+
+def test_backtest_default_prior_beats_alternatives() -> None:
+    """Pins the choice of the default method to E-Control's published history (see ARCHITECTURE.md)."""
+    raw = json.loads((FIXTURES / "econtrol_monthly.json").read_text())["months"]
+    pv = {(int(k[:4]), int(k[5:])): v["pv"] for k, v in raw.items()}
+    base = {(int(k[:4]), int(k[5:])): v["base"] for k, v in raw.items()}
+    months = [m for m in pv if m >= (2023, 2)]  # 13 months of history needed
+
+    def rmse(method: PriorMethod) -> float:
+        errors = [calc.prior(m, pv, base, method) - pv[m] for m in months]
+        return (sum(e * e for e in errors) / len(errors)) ** 0.5
+
+    results = {method: rmse(method) for method in PriorMethod}
+    assert results[PriorMethod.BASE_X_CAPTURE_RATE] == pytest.approx(2.17, abs=0.01)
+    assert results[PriorMethod.PREVIOUS_MONTH] == pytest.approx(2.67, abs=0.01)
+    assert results[PriorMethod.SEASONAL_DIFFERENCE] == pytest.approx(6.39, abs=0.01)
+    assert min(results, key=results.get) == calc.DEFAULT_PRIOR_METHOD
