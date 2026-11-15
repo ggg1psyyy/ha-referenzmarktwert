@@ -60,6 +60,9 @@ per hour `h` of the month: `price_h` is the mean of the hour's quarter-hourly da
 `generation_h` the hour's PV generation in the Austrian control area. Negative prices count normally. With the recorded
 data for September and October 2026 this reproduces the official E-Control values (10.53 and 17.71 ct/kWh).
 
+All prices are in **EUR/kWh** (E-Control publishes ct/kWh; 17.71 ct/kWh = 0.1771 EUR/kWh), because Home Assistant's
+Energy Dashboard books prices in the main currency unit.
+
 All parameters (aggregation period, deduction, data source URLs, country, bidding zone, generation type, time zone)
 have defaults in `custom_components/referenzmarktwert/const.py` and are passed in as parameters, so they can be made
 user-configurable.

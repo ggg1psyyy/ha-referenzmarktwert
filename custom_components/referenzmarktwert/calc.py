@@ -2,7 +2,8 @@
 
 No Home Assistant, no network, no clock: every input is passed in, so everything here is unit-testable.
 
-Units used internally: prices in EUR/MWh (as delivered by the exchange), generation in MW.
+Units: prices in EUR/MWh as delivered by the exchange (`eur_per_kwh` converts for Home Assistant),
+generation in MW. Never cents: Home Assistant books prices in the main currency unit.
 Timestamps are Unix seconds (UTC), the same as the Energy-Charts API delivers.
 
     RMW = sum_h(price_h * gen_h) / sum_h(gen_h)
@@ -16,7 +17,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from statistics import fmean
 
-from .const import DEFAULT_AGGREGATION_SECONDS, EUR_PER_MWH_PER_CT_PER_KWH
+from .const import DEFAULT_AGGREGATION_SECONDS, KWH_PER_MWH
 
 # A time series as (unix_seconds, value) pairs. value may be None (missing data point).
 type Series = Iterable[tuple[int, float | None]]
@@ -52,8 +53,9 @@ class WeightedValue:
     last_period: int | None  # start ts of the latest period used (= "data until")
 
     @property
-    def ct_per_kwh(self) -> float:
-        return self.eur_per_mwh / EUR_PER_MWH_PER_CT_PER_KWH
+    def eur_per_kwh(self) -> float:
+        """The unit Home Assistant's Energy Dashboard expects for prices."""
+        return self.eur_per_mwh / KWH_PER_MWH
 
 
 def weighted_value(
@@ -132,5 +134,5 @@ def blend(
 
 
 def payout(value: float, deduction: float) -> float:
-    """Feed-in price = market value - deduction (same unit for both)."""
+    """Feed-in price = market value - deduction (same unit for both, normally EUR/kWh)."""
     return value - deduction

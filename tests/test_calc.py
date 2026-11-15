@@ -35,15 +35,15 @@ def load_series(month: str) -> tuple[list[tuple[int, float | None]], list[tuple[
 
 
 @pytest.mark.parametrize(
-    ("year", "month", "official_ct"),
-    [(2026, 9, 10.53), (2026, 10, 17.71)],
+    ("year", "month", "official_eur_per_kwh"),
+    [(2026, 9, 0.1053), (2026, 10, 0.1771)],  # E-Control publishes 10.53 / 17.71 ct/kWh
 )
-def test_reproduces_official_value(year: int, month: int, official_ct: float) -> None:
+def test_reproduces_official_value(year: int, month: int, official_eur_per_kwh: float) -> None:
     gen, price = load_series(f"{year}-{month:02d}")
     start, end = month_bounds(year, month)
     result = calc.market_value(gen, price, start, end)
     assert result is not None
-    assert round(result.ct_per_kwh, 2) == official_ct
+    assert round(result.eur_per_kwh, 4) == official_eur_per_kwh
     assert result.last_period == end - 3600  # last hour of the month, nothing from the next one
 
 
@@ -53,8 +53,8 @@ def test_quarter_hour_weighting_differs() -> None:
     start, end = month_bounds(2026, 10)
     result = calc.market_value(gen, price, start, end, period=900)
     assert result is not None
-    assert round(result.ct_per_kwh, 2) != 17.71
-    assert result.ct_per_kwh == pytest.approx(17.54, abs=0.01)
+    assert round(result.eur_per_kwh, 4) != 0.1771
+    assert result.eur_per_kwh == pytest.approx(0.1754, abs=0.0001)
 
 
 def test_aggregate_half_open_window_and_none() -> None:
@@ -98,4 +98,8 @@ def test_blend() -> None:
 
 
 def test_payout() -> None:
-    assert calc.payout(17.71, 1.5) == pytest.approx(16.21)
+    assert calc.payout(0.1771, 0.015) == pytest.approx(0.1621)
+
+
+def test_eur_per_kwh_conversion() -> None:
+    assert calc.WeightedValue(177.1, 1.0, 1, 0).eur_per_kwh == pytest.approx(0.1771)

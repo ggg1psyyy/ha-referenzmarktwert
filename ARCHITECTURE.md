@@ -62,7 +62,10 @@ tests/             # pytest, recorded responses as fixtures
 - **Everything configurable.** Every URL, calculation parameter, login/API key and interval is user-configurable.
   Defaults live in `const.py`; logic functions take them as parameters instead of reading module constants.
 - **Pure core.** `calc.py` has no HA, network or clock dependency, so it is tested in isolation.
-- **Units.** Internally EUR/MWh (as delivered) and MW; sensors will report EUR/kWh, the unit the Energy Dashboard needs.
+- **Units: EUR, never cents.** Internally EUR/MWh (as delivered by the exchange) and MW; everything user-facing
+  (sensors, deduction setting, statistics) is in EUR/kWh. Reason: the Energy Dashboard only checks that a price
+  unit ends in `/kWh` (or another energy unit) and multiplies it by energy into the instance currency — a `ct/kWh`
+  sensor would pass validation but book costs 100x too high. E-Control's ct/kWh values are converted on import.
 - **Whole-month estimate** = month so far, blended with the previous month's official value; the weight is the share
   of the month's *expected PV energy* already passed (reference: the same month last year). Weighted by PV energy, not
   days. If the share is unknown (reference data missing) the month so far is used as is — real data is never
@@ -84,3 +87,4 @@ tests/             # pytest, recorded responses as fixtures
   Energy-Charts data.
 - 2026-11-15 — MIT license; README installation section (HACS custom repository, My Home Assistant links) written
   ahead of the integration itself.
+- 2026-11-15 — Switched all prices and the deduction default from ct/kWh to EUR/kWh (0.015 EUR/kWh).

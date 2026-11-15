@@ -13,7 +13,8 @@ DOMAIN: Final = "referenzmarktwert"
 DEFAULT_AGGREGATION_SECONDS: Final = 3600
 
 # Feed-in price = reference market value - deduction (Hofer "Sonne": 1.5 ct/kWh, CPI-indexed).
-DEFAULT_DEDUCTION_CT_PER_KWH: Final = 1.5
+# All prices are in the main currency unit (EUR), as Home Assistant's Energy Dashboard requires.
+DEFAULT_DEDUCTION_EUR_PER_KWH: Final = 0.015
 
 # --- Energy-Charts (Fraunhofer ISE), data licensed CC BY 4.0 ---------------------------------
 DEFAULT_ENERGY_CHARTS_BASE_URL: Final = "https://api.energy-charts.info"
@@ -31,4 +32,5 @@ DEFAULT_ECONTROL_COLUMN: Final = "D"  # B hydro, C wind, D photovoltaics
 DEFAULT_TIME_ZONE: Final = "Europe/Vienna"  # months are assigned in this zone
 
 # --- Units ---------------------------------------------------------------------------------------
-EUR_PER_MWH_PER_CT_PER_KWH: Final = 10.0  # 1 ct/kWh = 10 EUR/MWh
+# Exchange prices arrive in EUR/MWh; sensors and statistics use EUR/kWh.
+KWH_PER_MWH: Final = 1000.0
