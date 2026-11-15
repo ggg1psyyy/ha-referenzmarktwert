@@ -100,7 +100,8 @@ tests/             # pytest, recorded responses as fixtures
 - Built against Home Assistant 2026.10.4 — the newest version the test plugin (pytest-homeassistant-custom-component
   0.13.375) supports; `hacs.json` requires ≥ 2026.10.0. Patterns that only exist from 2026.11
   (`async_setup_entry` returning `None`, `async_unload_platforms_or_raise`) are not used; the classic forms work in
-  both. Manifest keys follow hassfest's schema of that version (no `categories`/`connectivity`).
+  both. Manifest keys follow hassfest's schema; `categories` (`energy.energy_prices`) is newer than 2026.10, whose loader
+  ignores it — the Marketplace validation warns without it.
 - Modelled on the core **Nord Pool** integration (a platinum price integration): typed `runtime_data`, coordinator
   with `config_entry=`, `_async_setup` for one-time work (loading the time zone file asynchronously), entity
   descriptions with `value_fn`, `has_entity_name` + translation keys, a service device, `PARALLEL_UPDATES = 0`.

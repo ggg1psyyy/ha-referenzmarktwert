@@ -1,7 +1,12 @@
 {
   "domain": "referenzmarktwert",
   "name": "Referenzmarktwert PV",
-  "codeowners": ["@ggg1psyyy"],
+  "categories": [
+    "energy.energy_prices"
+  ],
+  "codeowners": [
+    "@ggg1psyyy"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/ggg1psyyy/ha-referenzmarktwert",
   "integration_type": "service",
