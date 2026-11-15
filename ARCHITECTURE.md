@@ -82,3 +82,5 @@ tests/             # pytest, recorded responses as fixtures
 
 - 2026-11-15 — Milestone 1: `calc.py` + tests; reproduces the official Sep/Oct 2026 values from recorded
   Energy-Charts data.
+- 2026-11-15 — MIT license; README installation section (HACS custom repository, My Home Assistant links) written
+  ahead of the integration itself.

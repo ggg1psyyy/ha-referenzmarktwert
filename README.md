@@ -8,6 +8,33 @@ Austrian **reference market value** (*Referenzmarktwert*, § 13 EAG) of the runn
 grid export with it for the Energy Dashboard. Many Austrian feed-in tariffs are defined as
 "Referenzmarktwert Photovoltaik − deduction".
 
+## Installation
+
+> Not functional yet — the integration part does not exist so far. The steps below describe how it will be installed.
+
+### Via HACS (recommended)
+
+[![Open your Home Assistant instance and open this repository inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ggg1psyyy&repository=ha-referenzmarktwert&category=integration)
+
+Or manually in HACS:
+
+1. Open **HACS** in Home Assistant.
+2. Open the menu (⋮, top right) → **Custom repositories**.
+3. Repository: `https://github.com/ggg1psyyy/ha-referenzmarktwert`, type **Integration** → **Add**.
+4. Search for **Referenzmarktwert PV**, open it and click **Download**.
+5. **Restart** Home Assistant.
+
+### Manual
+
+Copy `custom_components/referenzmarktwert/` from the latest release into the `custom_components/` folder of your
+Home Assistant configuration directory, then restart Home Assistant.
+
+### Setup
+
+[![Open your Home Assistant instance and start setting up the integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=referenzmarktwert)
+
+Or: **Settings** → **Devices & services** → **Add integration** → search for **Referenzmarktwert PV**.
+
 ## Developed with Claude
 
 This project is developed with the help of **Claude** (Anthropic's AI assistant, via Claude Code): code, tests and
@@ -57,3 +84,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for design decisions and their reasons.
 - **E-Control**, https://www.e-control.at/referenzmarktwert — official monthly reference market values.
 
 This project is not affiliated with Fraunhofer ISE, E-Control or any electricity supplier.
+
+## License
+
+[MIT](LICENSE)
