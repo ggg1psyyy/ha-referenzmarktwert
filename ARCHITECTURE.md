@@ -334,3 +334,8 @@ better mid-month, worse early, not adopted.
   `month_`, `file_`): Home Assistant lists attributes sorted by name, so related values now stand together.
 - 2026-11-15 — The official-value sensors are named "… latest" ("… zuletzt veröffentlicht"): "official value" alone
   was unclear, and "last month" would be wrong from the 1st until E-Control publishes (day 2–14).
+- 2026-11-15 — English entity IDs in every language (`suggested_object_id` from the English translation, kept in
+  en.json only). Home Assistant derives entity IDs from the name in its configured language if that uses Latin
+  script, else from the English name, "because entity IDs must use lowercase letters, numbers, and underscores"
+  (home-assistant.io/docs/configuration/customizing-devices). Registered entities keep their IDs; the device's
+  *Recreate entity IDs* applies the new ones.

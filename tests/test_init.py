@@ -527,3 +527,23 @@ async def test_deprecation_notice(hass: HomeAssistant, config_entry: MockConfigE
 async def test_no_deprecation_notice(hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts) -> None:
     await setup(hass, config_entry)
     assert ir.async_get(hass).async_get_issue(DOMAIN, deprecation_issue_id(config_entry.entry_id)) is None
+
+
+@pytest.mark.freeze_time(NOW)
+async def test_entity_ids_are_english_in_a_german_home_assistant(
+    hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts
+) -> None:
+    """Names are translated, entity IDs are not (Home Assistant would derive German ones)."""
+    hass.config.language = "de"
+    await setup(hass, config_entry)
+    registry = er.async_get(hass)
+    ids = sorted(e.entity_id for e in er.async_entries_for_config_entry(registry, config_entry.entry_id))
+    assert ids == [
+        "sensor.referenzmarktwert_pv_estimate_running_month",
+        "sensor.referenzmarktwert_pv_expected_error_of_the_estimate",
+        "sensor.referenzmarktwert_pv_official_value_latest",
+        "sensor.referenzmarktwert_pv_payout_estimate_running_month",
+        "sensor.referenzmarktwert_pv_payout_official_value_latest",
+    ]
+    state = hass.states.get("sensor.referenzmarktwert_pv_official_value_latest")
+    assert state.attributes["friendly_name"] == "Referenzmarktwert PV Offizieller Wert zuletzt veröffentlicht"

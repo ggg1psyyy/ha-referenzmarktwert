@@ -166,6 +166,17 @@ class ReferenzmarktwertSensor(CoordinatorEntity[ReferenzmarktwertCoordinator], S
         )
 
     @property
+    def suggested_object_id(self) -> str | None:
+        """The entity ID from the English name, whatever language Home Assistant uses.
+
+        Home Assistant builds entity IDs from the name in its configured language (for languages in
+        Latin script): a German installation would get sensor.referenzmarktwert_pv_offizieller_wert_….
+        Only the displayed name is translated here; already registered entities keep their IDs.
+        """
+        key = f"component.{DOMAIN}.entity.sensor.{self.entity_description.translation_key}.name"
+        return self.platform_data.default_language_platform_translations.get(key) or super().suggested_object_id
+
+    @property
     def native_value(self) -> float | None:
         return self.entity_description.value_fn(self.coordinator.data)
 

@@ -45,6 +45,10 @@ against the real sources before it is saved.
 
 ## Sensors
 
+Entity IDs are English in every language (e.g. `sensor.referenzmarktwert_pv_official_value_latest`); only the
+displayed names are translated. Home Assistant itself would derive the IDs from the translated names. Entities
+created by an older version keep their IDs; to switch, open the device and choose **Menu → Recreate entity IDs**.
+
 All values in **EUR/kWh**. Attribute names start with their group (`calc_`, `data_until_`, `previous_month_`,
 `range_`, …), because Home Assistant lists attributes sorted by name.
 
