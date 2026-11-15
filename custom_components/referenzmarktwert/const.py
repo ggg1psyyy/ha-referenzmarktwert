@@ -21,11 +21,13 @@ DEFAULT_DEDUCTION_EUR_PER_KWH: Final = 0.015
 class PriorMethod(StrEnum):
     """How the not-yet-known rest of the month is estimated (the "prior" of the blend).
 
-    Backtest on E-Control's monthly history 2023-02..2026-10 (RMSE, ct/kWh):
-    BASE_X_CAPTURE_RATE 2.17, PREVIOUS_MONTH 2.67, SEASONAL_DIFFERENCE 6.39. See ARCHITECTURE.md.
+    Backtests (see ARCHITECTURE.md): monthly history 2023-02..2026-10, RMSE ct/kWh:
+    BASE_X_CAPTURE_RATE 2.17, PREVIOUS_MONTH 2.67, SEASONAL_DIFFERENCE 6.39. Hourly, whole estimate
+    on day 1/10/20: 2.17/1.69/1.10 vs 2.70/2.18/1.39 vs 6.27/4.51/2.40.
     """
 
-    # previous month's base price x the same calendar month's PV/base ratio last year
+    # price level (previous month's base, moving to the running month's) x the same calendar
+    # month's PV/base ratio (capture rate) last year
     BASE_X_CAPTURE_RATE = "base_x_capture_rate"
     # previous month's PV value as is
     PREVIOUS_MONTH = "previous_month"

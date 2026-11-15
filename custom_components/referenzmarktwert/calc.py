@@ -126,24 +126,51 @@ def shift_month(month: Month, delta: int) -> Month:
     return index // 12, index % 12 + 1
 
 
+def base_price(price: Series, start: int, end: int, period: int = DEFAULT_AGGREGATION_SECONDS) -> float | None:
+    """Base price: plain (unweighted) mean of the period prices in [start, end); None without data."""
+    periods = aggregate(price, start, end, period)
+    return fmean(periods.values()) if periods else None
+
+
+def time_share(start: int, end: int, until: int) -> float:
+    """Share (0..1) of [start, end) that lies before `until`."""
+    return min(1.0, max(0.0, (until - start) / (end - start)))
+
+
+def _price_level(previous: float | None, running: float | None, running_weight: float) -> float | None:
+    """Previous month's base price, moved towards the running month's as more of it is known."""
+    if running is None:
+        return previous
+    if previous is None:
+        return running
+    w = min(1.0, max(0.0, running_weight))
+    return (1 - w) * previous + w * running
+
+
 def prior(
     month: Month,
     pv: Mapping[Month, float],
     base: Mapping[Month, float],
     method: PriorMethod = DEFAULT_PRIOR_METHOD,
+    running_base: float | None = None,
+    running_weight: float = 0.0,
 ) -> float | None:
-    """Estimate a whole month's value from earlier months only (the blend's "prior").
+    """Estimate a whole month's value without its generation data (the blend's "prior").
 
     `pv` maps months to the technology's reference market value, `base` to the day-ahead base
-    price, both in the same unit. If the chosen method lacks data, it falls back to the previous
+    price, both in the same unit. For BASE_X_CAPTURE_RATE the price level is the previous month's
+    base price, moved towards `running_base` (the running month's base price so far, including the
+    already known day-ahead prices) by `running_weight` (normally the share of the month whose prices
+    are known, see `time_share`). If the chosen method lacks data, it falls back to the previous
     month's value; None if even that is missing.
     """
     prev, last_year, last_year_prev = (shift_month(month, d) for d in (-1, -12, -13))
     fallback = pv.get(prev)
     match method:
         case PriorMethod.BASE_X_CAPTURE_RATE:
-            if prev in base and last_year in pv and base.get(last_year):
-                return base[prev] * pv[last_year] / base[last_year]
+            level = _price_level(base.get(prev), running_base, running_weight)
+            if level is not None and last_year in pv and base.get(last_year):
+                return level * pv[last_year] / base[last_year]
         case PriorMethod.SEASONAL_DIFFERENCE:
             if fallback is not None and last_year in pv and last_year_prev in pv:
                 return fallback + pv[last_year] - pv[last_year_prev]

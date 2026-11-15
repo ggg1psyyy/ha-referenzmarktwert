@@ -66,8 +66,10 @@ Energy Dashboard books prices in the main currency unit.
 ### Estimate of the running month
 
 The month so far is blended with a prior for the rest of the month, weighted by the share of the month's expected PV
-energy already passed. Default prior: the previous month's day-ahead base price × the PV/base ratio ("capture rate")
-of the same calendar month last year. Alternatives: the previous month's value as is, or the previous month plus last
+energy already passed. Default prior: the day-ahead base price level (the previous month's, moving to the running
+month's as its prices become known) × the PV/base ratio ("capture rate") of the same calendar month last year.
+Backtested on 2023–2026: about ±2 ct/kWh (RMSE) on the 1st of the month, ±1.7 on the 10th, ±1.1 on the 20th
+(`tools/backtest_estimate.py`). Alternatives: the previous month's value as is, or the previous month plus last
 year's month-to-month change.
 
 All parameters (aggregation period, deduction, prior method, data source URLs, country, bidding zone, generation type,

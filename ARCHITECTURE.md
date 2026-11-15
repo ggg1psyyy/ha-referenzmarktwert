@@ -83,10 +83,13 @@ tests/             # pytest, recorded responses as fixtures
   of the month's *expected PV energy* already passed (reference: the same month last year). Weighted by PV energy, not
   days. If the share is unknown (reference data missing) the month so far is used as is — real data is never
   discarded. The elapsed time is taken from the latest data point, not the wall clock (generation lags ~2 h).
-- **Prior = previous month's base price × last year's capture rate of this calendar month** (capture rate = PV value /
-  day-ahead base price, both from the E-Control file). Configurable (`PriorMethod`); alternatives: previous month as
-  is, previous month + last year's month-to-month change. Falls back to the previous month if data is missing.
-  See "Backtest of the prior" below.
+- **Prior = price level × last year's capture rate of this calendar month** (capture rate = PV value / day-ahead
+  base price, both from the E-Control file). The price level starts at the previous month's base price and moves to
+  the running month's base price so far (including tomorrow's known day-ahead prices), weighted by the share of the
+  month whose prices are known. Configurable (`PriorMethod`); alternatives: previous month as is, previous month +
+  last year's month-to-month change. Falls back to the previous month if data is missing. Until the previous month
+  is published (2nd–7th), its PV value and base price are recomputed from Energy-Charts.
+  See "Backtests of the estimate" below.
 - **Official value wins.** Once E-Control publishes a month, it replaces the estimate for good.
 - **Statistics:** hours in UTC, months assigned in `Europe/Vienna` (DST-safe); only the running month and the previous
   month (until official) are rewritten per update; `rebuild_statistics` and `set_official` services.
@@ -98,7 +101,9 @@ tests/             # pytest, recorded responses as fixtures
 - Once the package `__init__.py` imports Home Assistant, the pure tests need HA installed
   (pytest-homeassistant-custom-component) — acceptable, or move the pure code.
 
-## Backtest of the prior (2026-11-15)
+## Backtests of the estimate (2026-11-15)
+
+### Monthly: the prior alone
 
 Each month 2023-02..2026-10 (n = 45) predicted from earlier months only, compared with the official PV value
 (ct/kWh; 2022 used as input only). `tests/test_calc.py::test_backtest_default_prior_beats_alternatives` pins it.
@@ -118,9 +123,25 @@ slowly with PV build-out (April: 0.90, 0.82, 0.53, 0.32, 0.20 in 2022–2026), s
 and the seasonal PV discount from last year. Multiplicative, so it scales with the price level. Small sample and a
 market in transition — the margins (0.3–0.5 ct) are indicative, not proof.
 
-To test once hourly data is available (milestone 2): use the *running* month's base price so far (day-ahead known up
-to tomorrow) instead of the previous month's. The prior matters mainly in days 1–10, before the previous month's
-official value is published; until then the previous month (PV and base) is recomputed from Energy-Charts.
+### Hourly: the whole estimate on day d (`tools/backtest_estimate.py`)
+
+For each month 2023-02..2026-10 (n = 45) and day d, only what was known at midnight starting day d+1 is used:
+generation up to 2 h before, day-ahead prices up to the end of the next day, the previous month's official value only
+after its publication date (recomputed from Energy-Charts before). RMSE in ct/kWh against the official value:
+
+| Method | d=1 | 3 | 5 | 7 | 10 | 15 | 20 | 25 |
+|---|---|---|---|---|---|---|---|---|
+| month so far only (no prior) | 6.03 | 3.66 | 2.76 | 2.19 | 1.75 | 1.55 | 1.12 | 0.66 |
+| previous month | 2.70 | 2.65 | 2.54 | 2.39 | 2.18 | 1.83 | 1.39 | 0.87 |
+| previous month + seasonal difference | 6.27 | 5.90 | 5.52 | 5.09 | 4.51 | 3.49 | 2.40 | 1.43 |
+| base × capture rate, previous month's base only | 2.19 | 2.15 | 2.08 | 1.96 | 1.80 | 1.56 | 1.23 | 0.78 |
+| **base × capture rate, level moving to the running month (default)** | **2.17** | **2.12** | **2.02** | **1.88** | **1.69** | **1.44** | **1.10** | **0.67** |
+
+Data floor (whole month recomputed from Energy-Charts vs official): RMSE 0.20, max 1.29 (2024-06; APG corrections).
+Findings: with only the previous month's base the prior drags late in the month — from day ~15 the month so far
+alone is better. Moving the price level to the running month's known prices fixes that; the default is the best or
+within 0.01 of the best on every day. Also tried: trusting the month so far more (square root of the PV share) —
+better mid-month, worse early, not adopted.
 
 ## History
 
@@ -132,3 +153,4 @@ official value is published; until then the previous month (PV and base) is reco
 - 2026-11-15 — Prior for the month estimate: backtested methods, default base × capture rate (`PriorMethod`).
 - 2026-11-15 — Milestone 2: `sources.py` (Energy-Charts client, E-Control xlsx parser), tests against recorded
   responses and a local test server, opt-in live tests; ruff for lint/format.
+- 2026-11-15 — Hourly backtest of the whole estimate; prior's price level now moves to the running month's base price.

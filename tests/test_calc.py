@@ -150,3 +150,24 @@ def test_backtest_default_prior_beats_alternatives() -> None:
     assert results[PriorMethod.PREVIOUS_MONTH] == pytest.approx(2.67, abs=0.01)
     assert results[PriorMethod.SEASONAL_DIFFERENCE] == pytest.approx(6.39, abs=0.01)
     assert min(results, key=results.get) == calc.DEFAULT_PRIOR_METHOD
+
+
+def test_prior_moves_price_level_towards_running_month() -> None:
+    pv = {(2025, 10): 8.0, (2026, 9): 10.0}
+    base = {(2025, 10): 10.0, (2026, 9): 20.0}  # capture rate last October 0.8
+    month = (2026, 10)
+    assert calc.prior(month, pv, base, running_base=30.0, running_weight=0.0) == pytest.approx(16.0)
+    assert calc.prior(month, pv, base, running_base=30.0, running_weight=0.5) == pytest.approx(20.0)
+    assert calc.prior(month, pv, base, running_base=30.0, running_weight=1.0) == pytest.approx(24.0)
+    assert calc.prior(month, pv, base, running_base=30.0, running_weight=7.0) == pytest.approx(24.0)  # clamped
+    # previous month's base unknown (not published yet): the running month's alone
+    assert calc.prior(month, pv, {(2025, 10): 10.0}, running_base=30.0, running_weight=0.1) == pytest.approx(24.0)
+
+
+def test_base_price_and_time_share() -> None:
+    price = [(0, 10.0), (900, 30.0), (3600, 50.0), (7200, 999.0)]
+    assert calc.base_price(price, 0, 7200) == pytest.approx((20.0 + 50.0) / 2)  # hours first, then plain mean
+    assert calc.base_price([], 0, 7200) is None
+    assert calc.time_share(0, 100, 25) == 0.25
+    assert calc.time_share(0, 100, -5) == 0.0
+    assert calc.time_share(0, 100, 500) == 1.0
