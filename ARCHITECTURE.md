@@ -142,13 +142,22 @@ What is due when is decided by the pure `schedule.plan(now, tz, sun, settings, s
 next thing becomes due; the coordinator sets its `update_interval` to that after every run (so it also wakes at night
 for prices, E-Control, the month change — and a long daytime interval cannot starve the 30-min price retry).
 
-- **Generation only in the daylight window** (sunrise + 60 min .. sunset + 180 min; offsets are options). PV
-  generation outside it is zero, or a few MW at dawn and dusk (Oct 2026: 128 quarter-hours of 4–8 MW, 0.045 % of the
-  month's energy) — they are not lost: every download starts at the **last stored point minus an overlap** (3 h),
-  so the morning's first download fetches them. In between, the estimate lacks them: measured for October 2026 at
-  the month end, 0.0015 ct/kWh (one measurement, not a bound).
-  Sunrise/sunset come from Home Assistant's home location (`helpers.sun`, computed locally); a window past midnight
-  (summer) is handled by also looking at yesterday's window; without sun times (polar) there is no gating.
+- **Generation only in the production window**, taken from the data itself: the first and the last value > 0 of
+  the latest stored day before today (normally yesterday; `schedule.production_hours`), moved to today, + 120 min /
+  + 150 min (options). Energy-Charts reports exactly 0 at night. The first version used sunrise/sunset at Home
+  Assistant's home location; request times at exactly sunrise/sunset + offset would have revealed the home's
+  position to the server over a few days (and the home is the wrong reference for national generation anyway).
+  Measured on Sep/Oct 2026: the first value moves by ±30 min from day to day, the last by −45..+30 min; Energy-Charts'
+  values start ~1.5 h before sunrise and end ~1.5 h after sunset, so the window is wider than the sunrise/sunset
+  one (about one request more per day: 16 instead of 15 on 15 Oct). Offsets: the start + 2 h is when the first value
+  is published (2 h lag); the end + 2.5 h covers the lag plus the largest observed day-to-day shift. In October
+  2026 10 points of 4–8 MW (0.003 % of the energy) were published outside their window: the morning ones still come
+  with the window's first download (every download starts at the **last stored point minus an overlap**, 3 h), the
+  evening ones with the nightly full download — which also refreshes yesterday before the next window is derived,
+  so the window cannot creep (test with days growing 30 min each). Times are moved by whole days of 86400 s, not by
+  the clock: the sun keeps UTC (25 Oct 2026, CEST → CET: the window is an hour earlier on the clock, as the recorded
+  data is). Yesterday is always downloaded (also on the 1st when the previous month is official), a window past
+  midnight is handled by also looking at yesterday's window, and without any generation data there is no gating.
 - **One full download per night** (02:00, option) of the running month — plus the previous month while it is not
   official — as a safety net in case Energy-Charts revises older values (not observed yet; not verifiable from one
   day's recordings).
@@ -167,8 +176,7 @@ for prices, E-Control, the month change — and a long daytime interval cannot s
   Last-Modified date, and when what was last tried. A restart or reload therefore costs no downloads, and the previous
   month needs no extra download (it was the running month). A **fingerprint** of the data-source settings is stored
   with it: after a *Reconfigure* to other sources the data is discarded. The file is deleted with the entry
-  (`async_remove_entry`, which also deletes the repair notice). Diagnostics show counts, never sunrise/sunset-based
-  times (they would reveal the location). **Unreadable data is downloaded again, never a reason to fail**: a file of
+  (`async_remove_entry`, which also deletes the repair notice). Diagnostics show counts. **Unreadable data is downloaded again, never a reason to fail**: a file of
   another format version (older, or newer after a downgrade) loads as empty (`CacheStore`: no migration code for
   data that can be fetched anew), unexpected content too (`CacheState.from_dict`); a damaged JSON file is renamed to
   `*.corrupt.<time>` by Home Assistant itself. After an unload an update still running does not save any more (it
@@ -274,3 +282,6 @@ better mid-month, worse early, not adopted.
   URLs without query/credentials in errors and diagnostics; duplicates removed (`calc.covered_until` derives the step,
   `calc.clamp01`, `const.entry_data`/`entry_options`, one test fake for all tests); `Series` is a `Sequence`;
   coordinator data compared before notifying the sensors (`always_update=False`).
+- 2026-11-15 — Download window from the generation data (yesterday's first/last value > 0 + 2 h / + 2.5 h) instead
+  of sunrise/sunset at Home Assistant's home location: the request times no longer reveal the location. Options
+  renamed (`start_offset_minutes`, `end_offset_minutes`).

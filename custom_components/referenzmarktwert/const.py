@@ -69,13 +69,14 @@ DEFAULT_TIME_ZONE: Final = "Europe/Vienna"  # months are assigned in this zone
 KWH_PER_MWH: Final = 1000.0
 
 # --- Polling -------------------------------------------------------------------------------------
-# Generation is fetched only while the sun can produce: from sunrise + offset until sunset + offset
-# (Energy-Charts lags ~2 h, so the window ends a few hours after sunset). Each download asks only
+# Generation is fetched only in the production window: from yesterday's first generation + offset until
+# its last generation + offset (Energy-Charts publishes ~2 h late; the last value moves by up to ~45 min
+# from day to day). No location is used. Each download asks only
 # for the hours since the last stored point (minus an overlap for late corrections); one full
 # download of the running month per night catches anything else.
-DEFAULT_UPDATE_INTERVAL_MINUTES: Final = 60  # generation during the daylight window
-DEFAULT_SUNRISE_OFFSET_MINUTES: Final = 60  # window starts this long after sunrise
-DEFAULT_SUNSET_OFFSET_MINUTES: Final = 180  # ... and ends this long after sunset
+DEFAULT_UPDATE_INTERVAL_MINUTES: Final = 60  # generation during the production window
+DEFAULT_START_OFFSET_MINUTES: Final = 120  # window starts this long after the first generation
+DEFAULT_END_OFFSET_MINUTES: Final = 150  # ... and ends this long after the last
 DEFAULT_OVERLAP_HOURS: Final = 3  # each download repeats the last hours (late or corrected values)
 DEFAULT_FULL_REFRESH_TIME: Final = "02:00:00"  # nightly full download of the running month (local time)
 # Day-ahead prices are published once a day (auction ~12:00, results ~12:45-13:00 CET).
@@ -116,8 +117,8 @@ CONF_UPDATE_INTERVAL: Final = "update_interval_minutes"
 CONF_OFFICIAL_INTERVAL: Final = "official_interval_hours"
 CONF_OFFICIAL_EARLY_INTERVAL: Final = "official_early_interval_hours"
 CONF_REQUEST_DELAY: Final = "request_delay_seconds"
-CONF_SUNRISE_OFFSET: Final = "sunrise_offset_minutes"
-CONF_SUNSET_OFFSET: Final = "sunset_offset_minutes"
+CONF_START_OFFSET: Final = "start_offset_minutes"
+CONF_END_OFFSET: Final = "end_offset_minutes"
 CONF_OVERLAP: Final = "overlap_hours"
 CONF_FULL_REFRESH_TIME: Final = "full_refresh_time"
 CONF_PRICE_TIME: Final = "price_time"
@@ -149,8 +150,8 @@ DEFAULT_OPTIONS: Final = {
     CONF_PRIOR_METHOD: DEFAULT_PRIOR_METHOD.value,
     CONF_AGGREGATION_SECONDS: DEFAULT_AGGREGATION_SECONDS,
     CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL_MINUTES,
-    CONF_SUNRISE_OFFSET: DEFAULT_SUNRISE_OFFSET_MINUTES,
-    CONF_SUNSET_OFFSET: DEFAULT_SUNSET_OFFSET_MINUTES,
+    CONF_START_OFFSET: DEFAULT_START_OFFSET_MINUTES,
+    CONF_END_OFFSET: DEFAULT_END_OFFSET_MINUTES,
     CONF_OVERLAP: DEFAULT_OVERLAP_HOURS,
     CONF_FULL_REFRESH_TIME: DEFAULT_FULL_REFRESH_TIME,
     CONF_PRICE_TIME: DEFAULT_PRICE_TIME,

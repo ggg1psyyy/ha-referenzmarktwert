@@ -21,7 +21,6 @@ from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store, UnsupportedStorageVersionError
-from homeassistant.helpers.sun import get_astral_event_date
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -40,6 +39,7 @@ from .const import (
     CONF_ECONTROL_PUBLISHED_COLUMN,
     CONF_ECONTROL_URL,
     CONF_ECONTROL_VALUE_COLUMN,
+    CONF_END_OFFSET,
     CONF_ENERGY_CHARTS_URL,
     CONF_FULL_REFRESH_TIME,
     CONF_GENERATION_PATH,
@@ -55,8 +55,7 @@ from .const import (
     CONF_PRIOR_METHOD,
     CONF_PRODUCTION_TYPE,
     CONF_REQUEST_DELAY,
-    CONF_SUNRISE_OFFSET,
-    CONF_SUNSET_OFFSET,
+    CONF_START_OFFSET,
     CONF_TIME_ZONE,
     CONF_TIMEOUT,
     CONF_UPDATE_INTERVAL,
@@ -146,8 +145,8 @@ def schedule_settings(options: Mapping[str, Any]) -> schedule.Settings:
     o = entry_options(options)
     return schedule.Settings(
         interval=float(o[CONF_UPDATE_INTERVAL]) * 60,
-        sunrise_offset=float(o[CONF_SUNRISE_OFFSET]) * 60,
-        sunset_offset=float(o[CONF_SUNSET_OFFSET]) * 60,
+        start_offset=float(o[CONF_START_OFFSET]) * 60,
+        end_offset=float(o[CONF_END_OFFSET]) * 60,
         full_refresh_time=time.fromisoformat(o[CONF_FULL_REFRESH_TIME]),
         price_time=time.fromisoformat(o[CONF_PRICE_TIME]),
         price_retry=float(o[CONF_PRICE_RETRY]) * 60,
@@ -226,7 +225,7 @@ class ReferenzmarktwertCoordinator(DataUpdateCoordinator[ReferenzmarktwertData])
         assert self._tz is not None  # set in _async_setup
         now = dt_util.utcnow().timestamp()
         month = calc.month_of(now, self._tz)
-        tasks = schedule.plan(now, self._tz, self._sun, self._settings, self._status(now, month)).tasks
+        tasks = schedule.plan(now, self._tz, self._settings, self._status(now, month)).tasks
         changed = bool(tasks)
 
         if Task.OFFICIAL in tasks:
@@ -236,7 +235,7 @@ class ReferenzmarktwertCoordinator(DataUpdateCoordinator[ReferenzmarktwertData])
         self._prune(month)
         if changed and not self._closed:
             await self._store.async_save(self.state.to_dict(self._fingerprint))
-        next_run = schedule.plan(now, self._tz, self._sun, self._settings, self._status(now, month)).next_run
+        next_run = schedule.plan(now, self._tz, self._settings, self._status(now, month)).next_run
         self.update_interval = timedelta(seconds=next_run - now)
 
         if self.state.full_refresh is None:
@@ -258,13 +257,12 @@ class ReferenzmarktwertCoordinator(DataUpdateCoordinator[ReferenzmarktwertData])
             official_failing=self._official_failing or not st.official,
             official_awaited=self._previous_pending(month),
             not_before=st.not_before,
+            production=schedule.production_hours(st.generation.series(), self._tz, self._today(now)),
         )
 
-    def _sun(self, day: date) -> tuple[datetime, datetime] | None:
-        """Sunrise and sunset at Home Assistant's home location (computed locally, nothing is sent)."""
-        sunrise = get_astral_event_date(self.hass, "sunrise", day)
-        sunset = get_astral_event_date(self.hass, "sunset", day)
-        return (sunrise, sunset) if sunrise is not None and sunset is not None else None
+    def _today(self, now: float) -> date:
+        assert self._tz is not None
+        return datetime.fromtimestamp(now, self._tz).date()
 
     def _evaluate(self, now: float, month: Month) -> ReferenzmarktwertData:
         assert self._tz is not None
@@ -302,11 +300,13 @@ class ReferenzmarktwertCoordinator(DataUpdateCoordinator[ReferenzmarktwertData])
         """E-Control has not published the previous month yet."""
         return calc.shift_month(month, -1) not in self.state.official
 
-    def _keep_from(self, month: Month) -> int:
-        """Start of the data needed: the running month, and the previous one until it is official."""
+    def _keep_from(self, now: float, month: Month) -> int:
+        """Start of the data needed: the running month, the previous one until it is official, and
+        always yesterday (its generation sets the download window, also on the 1st of a month)."""
         assert self._tz is not None
         needed = calc.shift_month(month, -1) if self._previous_pending(month) else month
-        return calc.month_bounds(needed, self._tz)[0]
+        yesterday = datetime.combine(self._today(now) - timedelta(days=1), time(), self._tz).timestamp()
+        return min(calc.month_bounds(needed, self._tz)[0], int(yesterday))
 
     def _prune(self, month: Month) -> None:
         assert self._tz is not None
@@ -409,7 +409,7 @@ class ReferenzmarktwertCoordinator(DataUpdateCoordinator[ReferenzmarktwertData])
         """Full: from the start of the data needed. Otherwise only since the last stored point."""
         st = self.state
         st.generation_attempt = now
-        keep_from = self._keep_from(month)
+        keep_from = self._keep_from(now, month)
         last = st.generation.last()
         full = full or st.generation.since is None or st.generation.since > keep_from or last is None
         start = keep_from if full else max(keep_from, last - self._overlap)
@@ -422,7 +422,7 @@ class ReferenzmarktwertCoordinator(DataUpdateCoordinator[ReferenzmarktwertData])
         """Prices since the last stored one, up to what is published (tomorrow, after the auction)."""
         st = self.state
         st.price_attempt = now
-        keep_from = self._keep_from(month)
+        keep_from = self._keep_from(now, month)
         last = st.price.last()
         full = st.price.since is None or st.price.since > keep_from or last is None
         start = keep_from if full else last + QUARTER_HOUR

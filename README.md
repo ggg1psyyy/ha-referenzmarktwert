@@ -62,8 +62,8 @@ All values in **EUR/kWh**.
 | Setup, **Configure** | Deduction | 0.015 EUR/kWh |
 | **Configure** | Estimate for the rest of the month | base price × last year's capture rate |
 | | Aggregation period | 3600 s (as E-Control) |
-| | Daytime interval (generation) | 60 min |
-| | Start after sunrise / end after sunset (daylight window) | 60 min / 180 min |
+| | Interval while PV produces (generation) | 60 min |
+| | Start after the first / end after the last generation (production window, from yesterday's data) | 120 min / 150 min |
 | | Overlap (each download repeats the last hours) | 3 h |
 | | Nightly full download of the running month | 02:00 |
 | | Tomorrow's prices from / retry interval | 13:30 / 30 min |
@@ -88,7 +88,7 @@ documentation are written by Claude and reviewed by the maintainer. Commits are 
 | Calculation (`calc.py`): hourly aggregation, generation-weighted mean, month estimate (prior + blend), payout | done, tested |
 | Data sources (`sources.py`): Energy-Charts client, E-Control history file parser | done, tested |
 | HA integration: setup/reconfigure/options flows, coordinator, sensors, diagnostics | done, tested |
-| Download schedule (`schedule.py`: daylight window, daily prices, conditional E-Control check) and stored data (`cache.py`) | done, tested |
+| Download schedule (`schedule.py`: production window from the data, daily prices, conditional E-Control check) and stored data (`cache.py`) | done, tested |
 | Energy Dashboard compensation statistic, backfill, services | not started |
 | CI: hassfest, Marketplace (HACS) validation, lint and tests on every push (`.github/workflows/`) | done |
 | First release | not started |
@@ -134,12 +134,13 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for design decisions and their reasons.
 
 Everything is downloaded by your Home Assistant directly from the two sources; nothing is sent anywhere else. The
 requests carry only their parameters and Home Assistant's standard User-Agent (Home Assistant, aiohttp and Python
-versions), plus the optional extra headers you configure. Times below are local (Europe/Vienna), with the default
+versions), plus the optional extra headers you configure. Home Assistant's home location is not used: the download
+times follow the national generation data, so they reveal nothing about where you live. Times below are local (Europe/Vienna), with the default
 settings. `start`/`end` are Unix seconds.
 
 | What | Request | When |
 |---|---|---|
-| PV generation of the running month (Energy-Charts answers with every generation type; only `Solar` is used) | `https://api.energy-charts.info/public_power?country=at&start=…&end=…` | in the **daylight window** (sunrise + 1 h until sunset + 3 h, at Home Assistant's home location) every 60 min, only the hours since the last stored point (minus a 3 h overlap); once more after the window; **once a night** (02:00) the whole running month |
+| PV generation of the running month (Energy-Charts answers with every generation type; only `Solar` is used) | `https://api.energy-charts.info/public_power?country=at&start=…&end=…` | in the **production window** (yesterday's first generation + 2 h until its last generation + 2.5 h, e.g. 07:45–22:15 in mid-October) every 60 min, only the hours since the last stored point (minus a 3 h overlap); once more after the window; **once a night** (02:00) the whole running month |
 | Day-ahead prices (EUR/MWh) | `https://api.energy-charts.info/price?bzn=AT&start=…&end=…` | **once a day** after the auction (from 13:30, again every 30 min until tomorrow's prices are there); at once if today's are missing |
 | PV generation of the same month last year (for the expected generation share) | `https://api.energy-charts.info/public_power?country=at&start=…&end=…` | once a month |
 | Official values | `https://www.e-control.at/documents/1785851/10823410/Referenzmarktwert_Entwicklung.xlsx` | checked daily, every 3 h until the 15th while last month's value is awaited; transferred **only if it changed** (`If-Modified-Since`; otherwise the server answers `304 Not Modified` without content) |
@@ -147,12 +148,12 @@ settings. `start`/`end` are Unix seconds.
 If Energy-Charts ever marks these endpoints as deprecated (it announces that at least six months ahead in every
 answer), the integration shows a repair notice in Home Assistant.
 
-Generation outside the daylight window is zero or nearly so (a few MW at dawn and dusk, about 0.05 % of a month's
-energy); the next download fetches those points too, so nothing is lost. Downloads are stored in Home Assistant's
+Generation outside the production window is zero (Energy-Charts reports exactly 0 at night); the few small values
+of a day that produces longer than the day before arrive with the next download, so nothing is lost. Downloads are stored in Home Assistant's
 `.storage` folder, so a restart or reload costs no downloads; the previous month needs no extra download either (it was
 the running month). If that file cannot be read (damaged, or from another version of the integration), the data is
 simply downloaded again; deleting the entry deletes the file. The connection test in setup and reconfigure makes three small requests: generation of one day,
-prices of one day, and the E-Control file. Per day: about 12–15 small Energy-Charts requests in November, over 20 around June (longer daylight), and one
+prices of one day, and the E-Control file. Per day: about 15–18 small Energy-Charts requests in autumn, more around June (longer days), and one
 E-Control check.
 
 ## Data sources and licenses

@@ -1,7 +1,10 @@
 """When to download what. Pure: no Home Assistant, no network, no clock.
 
-- Generation: only in the daylight window (sunrise + offset .. sunset + offset), every `interval`;
-  once more after the window ended if nothing was fetched since; one full download per night.
+- Generation: only in the production window, every `interval`; once more after the window ended
+  if nothing was fetched since; one full download per night. The window is taken from the data
+  itself: the first and the last value > 0 of the latest stored day before today (normally
+  yesterday), moved to today, plus `start_offset` and `end_offset`. Nothing about the home location
+  is used, so the request times reveal nothing about it.
 - Prices: day-ahead, published once a day. Fetched when today's are missing, and from `price_time`
   on until tomorrow's are there (every `price_retry`).
 - Reference month (same month last year): whenever it is missing; no own timer.
@@ -12,7 +15,7 @@
 exactly then (also at night, when only prices, E-Control or the month change may be due).
 """
 
-from collections.abc import Callable
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, tzinfo
 from enum import StrEnum
@@ -31,8 +34,10 @@ class Task(StrEnum):
 
 ENERGY_CHARTS_TASKS = frozenset({Task.FULL, Task.GENERATION, Task.PRICE, Task.REFERENCE})
 
-# sunrise and sunset (aware datetimes) for a local date, or None if the sun does not rise or set
-type SunTimes = Callable[[date], tuple[datetime, datetime] | None]
+DAY = 86400
+
+# the first and the last point with generation > 0 of one day (Unix seconds)
+type Production = tuple[int, int]
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,8 +45,8 @@ class Settings:
     """Durations in seconds, times of day in the configured time zone."""
 
     interval: float
-    sunrise_offset: float
-    sunset_offset: float
+    start_offset: float  # the window starts this long after the first generation
+    end_offset: float  # ... and ends this long after the last (Energy-Charts publishes ~2 h late)
     full_refresh_time: time
     price_time: time
     price_retry: float
@@ -63,6 +68,7 @@ class Status:
     official_failing: bool
     official_awaited: bool  # last month's official value is not known yet
     not_before: float | None  # Energy-Charts rate limit
+    production: Production | None  # see `production_hours`; None: no gating
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,34 +81,49 @@ def _at(day: date, clock: time, tz: tzinfo) -> float:
     return datetime.combine(day, clock, tz).timestamp()
 
 
-def _windows(day: date, sun: SunTimes, s: Settings) -> tuple[float, float] | None:
-    times = sun(day)
-    if times is None:
+def production_hours(series: Iterable[tuple[int, float | None]], tz: tzinfo, today: date) -> Production | None:
+    """First and last point with generation > 0 of the latest day before `today` that has any.
+
+    Normally that is yesterday; an older day only if yesterday is missing (e.g. an outage).
+    """
+    days: dict[date, list[int]] = {}
+    for ts, value in series:
+        if value is not None and value > 0:
+            day = datetime.fromtimestamp(ts, tz).date()
+            if day < today:
+                days.setdefault(day, []).append(ts)
+    if not days:
         return None
-    sunrise, sunset = times
-    return sunrise.timestamp() + s.sunrise_offset, sunset.timestamp() + s.sunset_offset
+    stamps = days[max(days)]
+    return min(stamps), max(stamps)
 
 
 @dataclass(frozen=True, slots=True)
-class Daylight:
+class Window:
     inside: bool  # inside a window now
     last_end: float | None  # end of the latest window that has ended
     next_start: float | None  # start of the next window
     next_end: float | None  # end of the next window that has not ended yet
 
 
-def daylight(now: float, tz: tzinfo, sun: SunTimes, s: Settings) -> Daylight:
-    """Where `now` is relative to the daylight windows.
+def production_window(now: float, tz: tzinfo, production: Production | None, s: Settings) -> Window:
+    """Where `now` is relative to the production windows of yesterday, today and tomorrow.
 
-    Yesterday's window is included: sunset + offset can be after midnight. Without sun times
-    (polar day or night) there is no gating: always inside.
+    The production day's times are moved by whole days of 86400 s, not by the local clock: the sun
+    keeps UTC, so on the day the clocks change the window moves by an hour on the clock, like the
+    sun does. Yesterday's window counts too: last generation + offset can be after midnight.
+    Without production data there is no gating: always inside.
     """
+    if production is None:
+        return Window(True, None, None, None)
+    first, last = production
     today = datetime.fromtimestamp(now, tz).date()
-    found = [_windows(today + timedelta(days=d), sun, s) for d in (-1, 0, 1)]
-    windows = [w for w in found if w is not None]
-    if len(windows) < len(found):
-        return Daylight(True, None, None, None)
-    return Daylight(
+    shift = (today - datetime.fromtimestamp(first, tz).date()).days
+    windows = [
+        (first + days * DAY + s.start_offset, last + days * DAY + s.end_offset)
+        for days in (shift - 1, shift, shift + 1)
+    ]
+    return Window(
         inside=any(start <= now < end for start, end in windows),
         last_end=max((end for _, end in windows if end <= now), default=None),
         next_start=min((start for start, _ in windows if start > now), default=None),
@@ -121,12 +142,12 @@ def _elapsed(since: float | None, now: float, wait: float) -> bool:
     return since is None or now - since >= wait
 
 
-def plan(now: float, tz: tzinfo, sun: SunTimes, s: Settings, st: Status) -> Plan:
+def plan(now: float, tz: tzinfo, s: Settings, st: Status) -> Plan:
     today = datetime.fromtimestamp(now, tz).date()
     end_of_today = _at(today + timedelta(days=1), time(), tz)
     end_of_tomorrow = _at(today + timedelta(days=2), time(), tz)
     price_today = _at(today, s.price_time, tz)
-    day = daylight(now, tz, sun, s)
+    day = production_window(now, tz, st.production, s)
     last_full_slot, last_full_day = _last_occurrence(now, s.full_refresh_time, tz)
 
     tasks: set[Task] = set()
@@ -139,7 +160,7 @@ def plan(now: float, tz: tzinfo, sun: SunTimes, s: Settings, st: Status) -> Plan
         if _elapsed(st.generation_attempt, now, s.interval):
             tasks.add(Task.GENERATION)
     elif day.last_end is not None and (st.generation_attempt is None or st.generation_attempt < day.last_end):
-        tasks.add(Task.GENERATION)  # once more after the window: the last daylight hours
+        tasks.add(Task.GENERATION)  # once more after the window: the last hours of generation
     if day.inside:
         wake.append((st.generation_attempt or now) + s.interval)
     wake += [w for w in (day.next_start, day.next_end) if w is not None]

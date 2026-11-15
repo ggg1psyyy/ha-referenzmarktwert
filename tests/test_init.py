@@ -149,6 +149,28 @@ async def test_night_downloads_nothing_until_the_full_download(
     assert first["start"] == last_night - 3 * 3600
 
 
+@pytest.mark.freeze_time("2026-11-01T09:00:00+00:00")  # 10:00 Vienna on the 1st, October is official
+async def test_first_download_includes_yesterday(
+    hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts, freezer: FrozenDateTimeFactory
+) -> None:
+    """Yesterday's generation sets the download window, so it is fetched even when its month is done."""
+    await setup(hass, config_entry)
+    yesterday = ts("2026-10-31T00:00:00+01:00")
+    assert requests_to(energy_charts, GENERATION_URL)[0]["start"] == yesterday
+    state = config_entry.runtime_data.state
+    assert state.generation.since == yesterday
+    # the window comes from 31 Oct (first generation 05:15, last 18:30): from 07:15 to 21:00
+    energy_charts.mock_calls.clear()
+    await wait_until(hass, freezer, "2026-11-01T20:05:00+00:00")  # 21:05 Vienna
+    times = [
+        datetime.fromtimestamp(c["end"], VIENNA).strftime("%H:%M") for c in requests_to(energy_charts, GENERATION_URL)
+    ]
+    assert times[-1] == "21:00"  # the last one: when the window ends
+    energy_charts.mock_calls.clear()
+    await wait_until(hass, freezer, "2026-11-01T22:55:00+00:00")  # 23:55 Vienna
+    assert requests_to(energy_charts, GENERATION_URL) == []
+
+
 @pytest.mark.freeze_time("2026-10-15T09:00:00+00:00")
 async def test_restart_costs_no_downloads(
     hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts, freezer: FrozenDateTimeFactory

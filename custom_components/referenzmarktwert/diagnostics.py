@@ -32,7 +32,7 @@ async def async_get_config_entry_diagnostics(
         "official_months": len(data.official) if data else 0,
         "latest_official": asdict(data.latest_official) if data and data.latest_official else None,
         "official_checked": data.official_checked.isoformat() if data and data.official_checked else None,
-        # what is stored (no sunrise/sunset-based times: they would reveal the home location)
+        # what is stored
         "stored": {
             "generation_points": len(state.generation),
             "generation_since": state.generation.since,

@@ -10,7 +10,6 @@ from zoneinfo import ZoneInfo
 
 import pytest
 import pytest_socket
-from astral.geocoder import database, lookup
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker, AiohttpClientMockResponse
 from yarl import URL
@@ -29,7 +28,6 @@ FIXTURES = Path(__file__).parent / "fixtures"
 PRICE_URL = f"{DEFAULT_ENERGY_CHARTS_BASE_URL}/price"
 GENERATION_URL = f"{DEFAULT_ENERGY_CHARTS_BASE_URL}/public_power"
 VIENNA = ZoneInfo("Europe/Vienna")
-VIENNA_CITY = lookup("Vienna", database())  # a city's public coordinates, from astral (no location of anyone)
 LAST_MODIFIED = "Thu, 05 Nov 2026 14:54:13 GMT"
 GENERATION_LAG = 2 * 3600  # Energy-Charts publishes generation about 2 h late
 
@@ -67,9 +65,8 @@ def config_entry() -> MockConfigEntry:
 
 @pytest.fixture
 async def vienna(hass):
-    """Home Assistant's home in Vienna (astral's city database; the test default is San Diego)."""
-    city = VIENNA_CITY
-    hass.config.latitude, hass.config.longitude = city.latitude, city.longitude
+    """Home Assistant's time zone Vienna. Its home location stays the test default (San Diego): the
+    integration does not use it, the download times come from the generation data."""
     await hass.config.async_set_time_zone("Europe/Vienna")
 
 
