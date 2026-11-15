@@ -341,3 +341,30 @@ def test_reference_month_waits_for_the_spread_after_midnight() -> None:
     assert early.next_run == max(slot, at("2026-12-01T00:01"))  # at least a minute between runs
     assert Task.REFERENCE in plan(slot, TZ, SPREAD, st).tasks
     assert Task.REFERENCE in plan(at("2026-12-01T00:00"), TZ, S, st).tasks  # spread 0: at once
+
+
+@pytest.mark.parametrize("clock", [time(0, 0), time(23, 58), time(0, 3)])
+@pytest.mark.parametrize("seed", ["entry-a", "entry-b"])
+def test_full_download_near_midnight_runs_once_per_day(clock: time, seed: str) -> None:
+    """With the spread a slot near midnight can fall on the neighbouring calendar day: still exactly one
+    full download per slot, never before it."""
+    settings = replace(S, full_refresh_time=clock, spread=600, seed=seed)
+    first = date(2026, 3, 20)  # across the clock change on 29 March
+    slots = [
+        datetime.combine(first + timedelta(days=n), clock, TZ).timestamp() + jitter(settings, first + timedelta(days=n))
+        for n in range(1, 60)
+    ]
+    now = slots[0] - 12 * 3600
+    st = status(full_refresh=now, generation_attempt=now, official_attempt=now, production=PRODUCTION)
+    runs = []
+    while now < slots[-1] + 3600:
+        st = replace(st, price_attempt=now, prices_until=now + 2 * 86400, official_attempt=now)
+        tasks = plan(now, TZ, settings, st).tasks
+        if Task.FULL in tasks:
+            runs.append(now)
+            st = replace(st, full_refresh=now, generation_attempt=now)
+        elif Task.GENERATION in tasks:
+            st = replace(st, generation_attempt=now)
+        now = plan(now, TZ, settings, st).next_run
+    assert len(runs) == len(slots)  # once per day: none missed, none twice
+    assert all(0 <= run - slot <= 60 for run, slot in zip(runs, slots, strict=True))  # at its slot

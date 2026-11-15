@@ -18,16 +18,13 @@ SS = 4
 
 
 def euro(dx: float, dy: float) -> bool:
-    """A euro sign centred in the sun: a "C" open to the right, crossed by two bars."""
-    # the C's centre lies right of the sun's centre: the whole sign (C from its centre - 0.125 to the
-    # ends of the opening at + 0.084, bars sticking out 0.015 further left) is then centred
-    c = 0.028
-    ex, ey = dx - c, dy
-    r = math.hypot(ex, ey)
-    opening = abs(math.atan2(ey, ex)) < math.radians(48)
+    """A euro sign in the sun: a "C" open to the right around the sun's centre, crossed by two bars."""
+    r = math.hypot(dx, dy)
+    opening = abs(math.atan2(dy, dx)) < math.radians(48)
     if 0.083 <= r <= 0.125 and not opening:
         return True
-    return any(abs(dy - bar) <= 0.0125 and c - 0.14 <= dx <= c + 0.05 for bar in (-0.024, 0.024))
+    # the bars stick out a little on the left, as in the printed sign
+    return any(abs(dy - bar) <= 0.0125 and -0.14 <= dx <= 0.05 for bar in (-0.024, 0.024))
 
 
 def inside(x: float, y: float) -> tuple[int, int, int] | None:

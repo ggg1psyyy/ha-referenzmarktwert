@@ -155,11 +155,16 @@ def production_window(now: float, tz: tzinfo, production: Production | None, s: 
     )
 
 
-def _last_occurrence(now: float, clock: time, tz: tzinfo, s: Settings) -> tuple[float, date]:
-    """The latest slot of `clock` (local, shifted by the day's jitter) at or before `now`, and its date."""
+def _slots(now: float, clock: time, tz: tzinfo, s: Settings) -> tuple[float, float]:
+    """The latest slot of `clock` (local, shifted by its day's jitter) at or before `now`, and the next one.
+
+    Near midnight a shifted slot can fall on the neighbouring calendar day (00:00 - 3 min is the
+    evening before, 23:58 + 4 min the next morning), so the slots of yesterday, today and tomorrow
+    are compared by time, not picked by date.
+    """
     today = datetime.fromtimestamp(now, tz).date()
-    day = today if _slot(today, clock, tz, s) <= now else today - timedelta(days=1)
-    return _slot(day, clock, tz, s), day
+    slots = sorted(_slot(today + timedelta(days=d), clock, tz, s) for d in (-2, -1, 0, 1, 2))
+    return max(x for x in slots if x <= now), min(x for x in slots if x > now)
 
 
 def _elapsed(since: float | None, now: float, wait: float) -> bool:
@@ -172,12 +177,12 @@ def plan(now: float, tz: tzinfo, s: Settings, st: Status) -> Plan:
     end_of_tomorrow = _at(today + timedelta(days=2), time(), tz)
     price_today = _slot(today, s.price_time, tz, s)
     day = production_window(now, tz, st.production, s)
-    last_full_slot, last_full_day = _last_occurrence(now, s.full_refresh_time, tz, s)
+    last_full_slot, next_full_slot = _slots(now, s.full_refresh_time, tz, s)
     month_start = today.replace(day=1)
     next_month = (month_start + timedelta(days=32)).replace(day=1)
 
     tasks: set[Task] = set()
-    wake: list[float] = [_slot(last_full_day + timedelta(days=1), s.full_refresh_time, tz, s)]
+    wake: list[float] = [next_full_slot]
 
     # --- generation
     if st.full_refresh is None or st.full_refresh < last_full_slot:

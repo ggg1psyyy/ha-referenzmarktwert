@@ -13,7 +13,10 @@ testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-markers = ["live: talks to the real APIs (opt-in: RMW_LIVE=1)"]
+markers = [
+    "live: talks to the real APIs (opt-in: RMW_LIVE=1)",
+    "backtest: the whole integration on recorded months (opt-in: RMW_BACKTEST=<cache dir>)",
+]
 
 [tool.ruff]
 line-length = 120

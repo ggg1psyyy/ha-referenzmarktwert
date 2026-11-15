@@ -119,3 +119,31 @@ def test_missing_data_degrades_gracefully(official: dict) -> None:
     assert result.known_share is None
     assert result.value == result.month_so_far
     assert result.expected_error == pytest.approx(0.0225 + 0.0025)  # unknown share: as if nothing were known
+
+
+def test_month_of_another_length_is_complete_at_its_end() -> None:
+    """February 2025 (28 days) against February 2024 (29 days): the whole month counts as known at its end.
+
+    Comparing plain offsets left the 29th of the reference outside: known share 0.955 at the end of
+    February 2025, and the estimate still mixed in 4.5 % of the prior.
+    """
+
+    def month_data(month: calc.Month, price: float) -> MonthData:
+        start, end = calc.month_bounds(month, VIENNA)
+        hours = range(start, end, 3600)
+        noon = [(t, 100.0 if 8 <= (t - start) // 3600 % 24 <= 15 else 0.0) for t in hours]  # roughly
+        return MonthData(noon, [(t, price) for t in hours])
+
+    start, end = calc.month_bounds((2025, 2), VIENNA)
+    current = month_data((2025, 2), 80.0)
+    reference = month_data((2024, 2), 50.0)
+    values = {(2025, 1): 0.15, (2024, 2): 0.06}  # a prior far from the month's 0.08: any blend would show
+    bases = {(2025, 1): 0.16, (2024, 2): 0.07}
+    result = estimate_month(end - 1, VIENNA, current, reference, values, bases)
+    assert result.generation_until == end
+    assert result.known_share == 1.0
+    assert result.value == pytest.approx(0.08)  # the month's own value, no prior left
+    # halfway through: about half of the energy known (offsets scaled by 29/28 days)
+    middle = start + 14 * 86400
+    half = estimate_month(middle, VIENNA, cut(current, middle, middle), reference, values, bases)
+    assert half.known_share == pytest.approx(0.5, abs=0.03)

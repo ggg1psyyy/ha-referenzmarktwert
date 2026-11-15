@@ -300,8 +300,8 @@ better mid-month, worse early, not adopted.
   late, tomorrow's prices from 13:00, E-Control on its publication day), estimate read at 23:55 every day. On the
   last day the error equals the data floor in every month (nothing lost by the window, incremental downloads or
   spread). Error below 0.10 ct/kWh only from day 26–31; mid-month up to 4 ct/kWh in winter (Dec 2023, Feb 2026),
-  the prior for the unknown rest of the month dominates. Summary table in the README; the test was a one-off
-  (not committed).
+  the prior for the unknown rest of the month dominates. Summary table in the README; kept as the opt-in
+  `tests/test_backtest.py` (`RMW_BACKTEST=<cache>`, seed 15809 for the table, or `RMW_BACKTEST_MONTHS`).
 - 2026-11-15 — Expected error of the estimate (attributes `expected_error`/`low`/`high`, own sensor). Error analysis
   on 2023-02..2026-10 (oracle substitutions, RMSE ct/kWh on day 1/10/20): current 2.17/1.69/1.10; true rest-of-month
   price level 1.34/0.96/0.63; true capture rate 1.40/1.14/0.76; true share 2.15/1.68/1.10 — the level and the
@@ -319,3 +319,15 @@ better mid-month, worse early, not adopted.
 - 2026-11-15 — Release 0.1.0 as pre-release (tag `v0.1.0`). The Marketplace lists a pre-release only with the
   repository's *Pre-release* switch on (`show_beta`); without it the default branch is installed.
 - 2026-11-15 — Brand icon: a blue euro sign in the sun (`tools/make_icon.py`).
+- 2026-11-15 — 0.1.1, a full release (the Marketplace shows a pre-release only after installation, with the
+  repository's *Pre-release* switch; before that it offered the commit id). Changes:
+  - Known share for months of another length than last year's (February 28/29 days): the elapsed time is scaled by
+    the ratio of the month lengths. Comparing plain offsets left the reference's 29th outside, so February 2025
+    ended at known share 0.955 and still mixed in 4.5 % of the prior (+0.09 instead of +0.06 ct/kWh). No other
+    month in 2023-02..2026-10 changes.
+  - The nightly full download near midnight: with the spread a slot can fall on the neighbouring calendar day
+    (00:00 - 3 min, 23:58 + 4 min); it ran late or twice. Slots are now compared by time across the neighbouring
+    days (`schedule._slots`); tested over 60 days with 00:00, 00:03 and 23:58.
+  - The whole-integration backtest is an opt-in test; its fake Energy-Charts server is the tests' shared one.
+  - Icon: the euro sign's arc centred in the sun.
+

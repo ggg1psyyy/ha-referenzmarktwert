@@ -1,6 +1,6 @@
 # Referenzmarktwert PV — Home Assistant integration
 
-> **Status: alpha — first pre-release 0.1.0.**
+> **Status: alpha — 0.1.1.**
 > The sensors work; the Energy Dashboard compensation statistic is not implemented yet.
 
 A custom [Home Assistant](https://www.home-assistant.io/) integration (installed through the Marketplace) that computes the
@@ -10,9 +10,6 @@ grid export with it for the Energy Dashboard. Many Austrian feed-in tariffs are 
 
 ## Installation
 
-> 0.1.0 is a **pre-release**. The Marketplace offers only full releases by default and installs the default branch
-> instead. To get 0.1.0, open **Settings → Devices & services → Marketplace**, open the device *Referenzmarktwert PV*,
-> enable its **Pre-release** switch (a configuration entity, disabled by default) and install the offered update.
 
 ### Via the Marketplace (recommended, Home Assistant 2026.11+)
 
@@ -96,7 +93,7 @@ documentation are written by Claude and reviewed by the maintainer. Commits are 
 | Download schedule (`schedule.py`: production window from the data, daily prices, conditional E-Control check) and stored data (`cache.py`) | done, tested |
 | Energy Dashboard compensation statistic, backfill, services | not started |
 | CI: hassfest, Marketplace (HACS) validation, lint and tests on every push (`.github/workflows/`) | done |
-| First release | 0.1.0, pre-release |
+| Releases | 0.1.0 (pre-release), 0.1.1 |
 
 ### How the value is calculated
 
@@ -120,7 +117,7 @@ Backtested on 2023–2026: about ±2 ct/kWh (RMSE) on the 1st of the month, ±1.
 (`tools/backtest_estimate.py`). Alternative: the previous month's value as is.
 
 Test of the whole integration (default settings), day by day on recorded data of 16 random months, 4 per season
-(2023–2026). Data was served as it is published (generation 2 h late, tomorrow's prices from 13:00, E-Control on its
+(2023–2026; `tests/test_backtest.py` with seed 15809). Data was served as it is published (generation 2 h late, tomorrow's prices from 13:00, E-Control on its
 real publication day). The table shows the error of the estimate against the official value, ct/kWh, at the end of
 the day: mean of the absolute errors (largest in brackets).
 
@@ -150,6 +147,9 @@ uv venv --python 3.14 .venv
 uv pip install --python .venv pytest-homeassistant-custom-component==0.13.375 ruff
 .venv/bin/python -m pytest                       # offline tests (recorded data, local test server)
 RMW_LIVE=1 .venv/bin/python -m pytest -m live    # optional: against the real APIs
+# optional, slow: the whole integration day by day on recorded months (data downloaded once by the tool)
+.venv/bin/python tools/backtest_estimate.py --cache /some/dir
+RMW_BACKTEST=/some/dir RMW_BACKTEST_SEED=15809 .venv/bin/python -m pytest -m backtest -s
 .venv/bin/ruff check . && .venv/bin/ruff format --check .
 ```
 

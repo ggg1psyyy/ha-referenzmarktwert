@@ -108,7 +108,10 @@ def estimate_month(
         last_year = calc.shift_month(month, -12)
         ref_start, ref_end = calc.month_bounds(last_year, tz)
         ref = calc.aggregate(reference.generation, ref_start, ref_end, period)
-        known_share = calc.elapsed_share(ref, ref_start, generation_until - start)
+        # the same fraction of last year's month: months can differ in length (February 28/29 days, the
+        # clock change), and a complete month must count as completely known
+        elapsed = (generation_until - start) * (ref_end - ref_start) / (end - start)
+        known_share = calc.elapsed_share(ref, ref_start, elapsed)
 
     # What is known about the previous month: official if published, else recomputed.
     pv, base = dict(official_value), dict(official_base)

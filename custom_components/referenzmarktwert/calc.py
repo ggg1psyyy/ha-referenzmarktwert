@@ -108,7 +108,7 @@ def market_value(
     )
 
 
-def elapsed_share(reference: Mapping[int, float], reference_start: int, elapsed: int) -> float | None:
+def elapsed_share(reference: Mapping[int, float], reference_start: int, elapsed: float) -> float | None:
     """Share (0..1) of a reference month's energy produced in its first `elapsed` seconds.
 
     `reference` is an aggregated generation series of a comparable month (e.g. the same month last

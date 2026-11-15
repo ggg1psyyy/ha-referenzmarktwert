@@ -3,7 +3,8 @@
 import importlib.util
 import json
 import time
-from datetime import datetime, timedelta
+from collections.abc import Callable
+from datetime import date, datetime, timedelta
 from datetime import time as clock
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -93,19 +94,27 @@ def energy_charts(aioclient_mock: AiohttpClientMocker) -> AiohttpClientMocker:
     return fake_sources(aioclient_mock, (FIXTURES / "Referenzmarktwert_Entwicklung.xlsx").read_bytes())
 
 
-def fake_sources(aioclient_mock: AiohttpClientMocker, xlsx: bytes) -> AiohttpClientMocker:
-    """Energy-Charts as it behaves, from recorded data (Oct 2025, Sep + Oct 2026).
+def fake_sources(
+    aioclient_mock: AiohttpClientMocker,
+    xlsx: bytes | Callable[[date], tuple[bytes, str]],
+    generation: list[tuple[int, float | None]] | None = None,
+    price: list[tuple[int, float | None]] | None = None,
+) -> AiohttpClientMocker:
+    """Energy-Charts as it behaves, from recorded data (default: Oct 2025, Sep + Oct 2026).
 
     Answers exactly the requested window (`end` inclusive) with what is published at the (frozen)
     current time: generation until ~2 h ago, day-ahead prices until the end of today, or of tomorrow
     after 13:00 Vienna time. An empty window is "404 no content available", as the real API does.
-    E-Control serves the history file with a Last-Modified header.
+    E-Control serves `xlsx` with a Last-Modified header; a function of today's date gives the file as
+    published on that day, with its Last-Modified value.
     """
-    generation = _recorded(
-        ["public_power_at_2025-10.json", "public_power_at_2026-09.json", "public_power_at_2026-10.json"],
-        sources.parse_generation,
-    )
-    price = _recorded(["price_at_2026-09.json", "price_at_2026-10.json"], sources.parse_price)
+    if generation is None:
+        generation = _recorded(
+            ["public_power_at_2025-10.json", "public_power_at_2026-09.json", "public_power_at_2026-10.json"],
+            sources.parse_generation,
+        )
+    if price is None:
+        price = _recorded(["price_at_2026-09.json", "price_at_2026-10.json"], sources.parse_price)
 
     async def answer(method: str, url: URL, data) -> AiohttpClientMockResponse:
         start, end = int(url.query["start"]), int(url.query["end"])
@@ -122,7 +131,7 @@ def fake_sources(aioclient_mock: AiohttpClientMocker, xlsx: bytes) -> AiohttpCli
             local = datetime.fromtimestamp(now, VIENNA)
             days = 2 if local.hour >= 13 else 1
             published = datetime.combine(local.date() + timedelta(days=days), clock(), VIENNA).timestamp()
-            points = [(ts, v) for ts, v in price if start <= ts <= min(end, published - 900)]
+            points = [(ts, v) for ts, v in price if start <= ts <= end and ts < published]
             body = {
                 "unix_seconds": [ts for ts, _ in points],
                 "price": [v for _, v in points],
@@ -133,9 +142,16 @@ def fake_sources(aioclient_mock: AiohttpClientMocker, xlsx: bytes) -> AiohttpCli
             return AiohttpClientMockResponse(method, url, status=404, text="no content available")
         return AiohttpClientMockResponse(method, url, json=body)
 
+    async def econtrol(method: str, url: URL, data) -> AiohttpClientMockResponse:
+        content, modified = xlsx(datetime.fromtimestamp(time.time(), VIENNA).date())
+        return AiohttpClientMockResponse(method, url, response=content, headers={"Last-Modified": modified})
+
     aioclient_mock.get(GENERATION_URL, side_effect=answer)
     aioclient_mock.get(PRICE_URL, side_effect=answer)
-    aioclient_mock.get(DEFAULT_ECONTROL_XLSX_URL, content=xlsx, headers={"Last-Modified": LAST_MODIFIED})
+    if callable(xlsx):
+        aioclient_mock.get(DEFAULT_ECONTROL_XLSX_URL, side_effect=econtrol)
+    else:
+        aioclient_mock.get(DEFAULT_ECONTROL_XLSX_URL, content=xlsx, headers={"Last-Modified": LAST_MODIFIED})
     return aioclient_mock
 
 
