@@ -287,9 +287,11 @@ async def test_no_save_after_unload(
     coordinator = config_entry.runtime_data
     assert await hass.config_entries.async_unload(config_entry.entry_id)
     del hass_storage[storage_key(config_entry.entry_id)]
-    coordinator.state.official_attempt = None  # something is due
-    await coordinator._async_update_data()
+    coordinator.state.official_attempt = coordinator.state.generation_attempt = None  # downloads are due
+    with patch.object(coordinator, "_report_deprecation") as report:
+        await coordinator._async_update_data()
     assert storage_key(config_entry.entry_id) not in hass_storage
+    report.assert_not_called()  # a removed entry's repair notice must not come back
 
 
 @pytest.mark.freeze_time(NOW)
@@ -302,6 +304,7 @@ async def test_stored_data_of_another_version_is_downloaded_again(
     await setup(hass, config_entry)
     assert config_entry.state is ConfigEntryState.LOADED
     assert requests_to(energy_charts, GENERATION_URL)  # downloaded again
+    assert hass_storage[key]["version"] == STORAGE_VERSION  # replaced by the new data
 
 
 @pytest.mark.freeze_time(NOW)
@@ -330,6 +333,7 @@ async def test_diagnostics_redacts_headers(hass: HomeAssistant, energy_charts) -
     from custom_components.referenzmarktwert.const import (
         CONF_ECONTROL_HEADER_NAME,
         CONF_ECONTROL_HEADER_VALUE,
+        CONF_ECONTROL_URL,
         CONF_HEADER_NAME,
         CONF_HEADER_VALUE,
         DEFAULT_DATA,
@@ -344,19 +348,22 @@ async def test_diagnostics_redacts_headers(hass: HomeAssistant, energy_charts) -
             CONF_HEADER_VALUE: "secret",
             CONF_ECONTROL_HEADER_NAME: "X-Other",
             CONF_ECONTROL_HEADER_VALUE: "hidden",
+            CONF_ECONTROL_URL: DEFAULT_ECONTROL_XLSX_URL + "?key=SECRET",
         },
         options={"request_delay_seconds": 0},
     )
     await setup(hass, entry)
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
     assert diagnostics["data"][CONF_HEADER_VALUE] == "**REDACTED**"
+    assert diagnostics["data"][CONF_ECONTROL_URL] == DEFAULT_ECONTROL_XLSX_URL  # without the query
     assert diagnostics["data"][CONF_ECONTROL_HEADER_VALUE] == "**REDACTED**"
     assert diagnostics["estimate"]["month"] == (2026, 10)
     assert diagnostics["stored"]["generation_since"] == OCTOBER[0]
     # the headers are really sent, each only to its own source
     calls = energy_charts.mock_calls
     assert any(h and h.get("X-Api-Key") == "secret" for _, url, _, h in calls if str(url).startswith(PRICE_URL))
-    assert any(h and h.get("X-Other") == "hidden" for _, url, _, h in calls if str(url) == DEFAULT_ECONTROL_XLSX_URL)
+    econtrol = [h for _, url, _, h in calls if str(url).startswith(DEFAULT_ECONTROL_XLSX_URL)]
+    assert any(h and h.get("X-Other") == "hidden" for h in econtrol)
     assert not any(h and "X-Other" in h for _, url, _, h in calls if str(url).startswith(PRICE_URL))
 
 

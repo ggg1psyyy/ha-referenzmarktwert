@@ -76,6 +76,7 @@ from .sources import (
     OfficialValue,
     SourceError,
     SourceRateLimitError,
+    display_url,
     fetch_econtrol,
 )
 
@@ -363,7 +364,8 @@ class ReferenzmarktwertCoordinator(DataUpdateCoordinator[ReferenzmarktwertData])
             if self._energy_charts_failing:
                 _LOGGER.info("Energy-Charts available again")
                 self._energy_charts_failing = False
-            self._report_deprecation()
+            if not self._closed:  # an update finishing after removal must not bring the notice back
+                self._report_deprecation()
         return None
 
     def _report_deprecation(self) -> None:
@@ -377,7 +379,7 @@ class ReferenzmarktwertCoordinator(DataUpdateCoordinator[ReferenzmarktwertData])
                 is_fixable=False,
                 severity=ir.IssueSeverity.WARNING,
                 translation_key="energy_charts_deprecated",
-                learn_more_url=self._energy_charts.config.base_url,
+                learn_more_url=display_url(self._energy_charts.config.base_url),
             )
         else:
             ir.async_delete_issue(self.hass, DOMAIN, issue_id)
@@ -449,10 +451,11 @@ def deprecation_issue_id(entry_id: str) -> str:
 class CacheStore(Store[dict[str, Any]]):
     """The entry's stored downloads: `<config>/.storage/referenzmarktwert.<entry_id>`.
 
-    A file of another format version (older, or newer after a downgrade) is not converted: it loads
-    as empty and is replaced at the next save; the data is downloaded again. That is cheaper and
-    safer than migration code for data that can be fetched anew. (A damaged file is renamed to
-    `*.corrupt.<time>` by Home Assistant itself and also loads as empty.)
+    A file of another format version is not converted; the data is downloaded again. That is cheaper
+    and safer than migration code for data that can be fetched anew:
+    - older version: Home Assistant writes the (empty) migration result over it right at loading;
+    - newer version (after a downgrade): loads as empty, replaced at the next save.
+    A damaged file is renamed to `*.corrupt.<time>` by Home Assistant itself and loads as empty.
     """
 
     def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
