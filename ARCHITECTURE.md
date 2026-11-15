@@ -318,3 +318,4 @@ better mid-month, worse early, not adopted.
   as the table, smooth, works for any month length, two options instead of 31 numbers).
 - 2026-11-15 — Release 0.1.0 as pre-release (tag `v0.1.0`). The Marketplace lists a pre-release only with the
   repository's *Pre-release* switch on (`show_beta`); without it the default branch is installed.
+- 2026-11-15 — Brand icon: a blue euro sign in the sun (`tools/make_icon.py`).

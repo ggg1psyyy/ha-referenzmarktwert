@@ -1,4 +1,4 @@
-"""Draw the brand icon (a sun above a price line) as PNG, standard library only.
+"""Draw the brand icon (a sun with a euro sign above a price line) as PNG, standard library only.
 
     python tools/make_icon.py      # writes custom_components/referenzmarktwert/brand/icon.png (+ @2x)
 
@@ -17,13 +17,23 @@ LINE = (3, 169, 244)  # Home Assistant blue
 SS = 4
 
 
+def euro(dx: float, dy: float) -> bool:
+    """A euro sign centred in the sun: a "C" open to the right, crossed by two bars."""
+    ex, ey = dx + 0.015, dy  # the C sits slightly right, so that the bars stick out on the left
+    r = math.hypot(ex, ey)
+    opening = abs(math.atan2(ey, ex)) < math.radians(48)
+    if 0.083 <= r <= 0.125 and not opening:
+        return True
+    return any(abs(dy - bar) <= 0.0125 and -0.155 <= dx <= 0.035 for bar in (-0.024, 0.024))
+
+
 def inside(x: float, y: float) -> tuple[int, int, int] | None:
     """Colour of the shape at (x, y) in a 0..1 square, or None for transparent."""
     cx, cy = 0.5, 0.42
     dx, dy = x - cx, y - cy
     r = math.hypot(dx, dy)
     if r <= 0.2:
-        return SUN
+        return LINE if euro(dx, dy) else SUN
     # 12 rays: short rounded bars between radius 0.27 and 0.38
     angle = math.atan2(dy, dx) % (2 * math.pi / 12)
     near = min(angle, 2 * math.pi / 12 - angle) * r
