@@ -295,3 +295,10 @@ better mid-month, worse early, not adopted.
   of sunrise/sunset at Home Assistant's home location: the request times no longer reveal the location. Options
   renamed (`start_offset_minutes`, `end_offset_minutes`).
 - 2026-11-15 — Daily random spread of the planned download times (±5 min, option `spread_minutes`).
+- 2026-11-15 — Whole-integration backtest (version 725cfb5, default settings): the real coordinator in the HA test
+  harness on recorded data of 16 random months (4 per season, 2023–2026), data served as published (generation 2 h
+  late, tomorrow's prices from 13:00, E-Control on its publication day), estimate read at 23:55 every day. On the
+  last day the error equals the data floor in every month (nothing lost by the window, incremental downloads or
+  spread). Error below 0.10 ct/kWh only from day 26–31; mid-month up to 4 ct/kWh in winter (Dec 2023, Feb 2026),
+  the prior for the unknown rest of the month dominates. Summary table in the README; the test was a one-off
+  (not committed).

@@ -115,6 +115,22 @@ month's as its prices become known) × the PV/base ratio ("capture rate") of the
 Backtested on 2023–2026: about ±2 ct/kWh (RMSE) on the 1st of the month, ±1.7 on the 10th, ±1.1 on the 20th
 (`tools/backtest_estimate.py`). Alternative: the previous month's value as is.
 
+Test of the whole integration (default settings), day by day on recorded data of 16 random months, 4 per season
+(2023–2026). Data was served as it is published (generation 2 h late, tomorrow's prices from 13:00, E-Control on its
+real publication day). The table shows the error of the estimate against the official value, ct/kWh, at the end of
+the day: mean of the absolute errors (largest in brackets).
+
+| Season (months) | Day 1 | Day 10 | Day 20 | Day 25 | Last day | Below 0.25 from day | Below 0.10 from day |
+|---|---|---|---|---|---|---|---|
+| Winter (2023-02, 2023-12, 2025-12, 2026-02) | 2.23 (4.25) | 2.44 (4.19) | 1.92 (3.30) | 1.28 (2.57) | 0.04 | 25–30 | 26–31 |
+| Spring (2024-03, 2024-05, 2025-03, 2026-04) | 1.85 (3.71) | 1.20 (1.98) | 1.16 (1.80) | 0.65 (0.97) | 0.07 | 26–31 | 31 |
+| Summer (2023-06, 2023-08, 2024-08, 2025-07) | 0.58 (1.17) | 0.66 (0.81) | 0.45 (1.13) | 0.24 (0.40) | 0.02 | 24–28 | 26–29 |
+| Autumn (2023-11, 2024-11, 2025-09, 2025-10) | 1.62 (3.72) | 1.34 (1.98) | 0.33 (0.86) | 0.25 (0.66) | 0.02 | 15–29 | 28–30 |
+| All 16 | 1.57 (4.25) | 1.41 (4.19) | 0.97 (3.30) | 0.60 (2.57) | 0.04 | 15–31 | 26–31 |
+
+On the last day the error is only the difference between Energy-Charts' data and E-Control's own computation
+(at most 0.14 ct/kWh); in three months (2024-05, 2026-02, 2026-04) it stays just above 0.10 for that reason.
+
 ## Development
 
 Requires Python ≥ 3.14.2 (the current Home Assistant minimum). With [uv](https://docs.astral.sh/uv/):
