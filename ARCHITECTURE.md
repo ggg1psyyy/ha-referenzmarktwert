@@ -316,3 +316,5 @@ better mid-month, worse early, not adopted.
   ±1/±2 sigma, Gaussian score): RMSE-per-day table 74/92 %, 0.73; 2.25 ct × (1 − share) + 0.25 ct 74/93 %, 0.79;
   proportional to the prior ~85/94 % but far too wide (score 0.96–1.34). Chosen: the two-parameter form (as good
   as the table, smooth, works for any month length, two options instead of 31 numbers).
+- 2026-11-15 — Release 0.1.0 as pre-release (tag `v0.1.0`). The Marketplace lists a pre-release only with the
+  repository's *Pre-release* switch on (`show_beta`); without it the default branch is installed.
