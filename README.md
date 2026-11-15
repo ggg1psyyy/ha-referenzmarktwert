@@ -12,17 +12,22 @@ grid export with it for the Energy Dashboard. Many Austrian feed-in tariffs are 
 
 > Not functional yet — the integration part does not exist so far. The steps below describe how it will be installed.
 
-### Via HACS (recommended)
+### Via the Marketplace (recommended, Home Assistant 2026.11+)
 
-[![Open your Home Assistant instance and open this repository inside HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ggg1psyyy&repository=ha-referenzmarktwert&category=integration)
+Since Home Assistant 2026.11, custom integrations are installed through the built-in **Marketplace** (the successor of
+HACS; this repository uses the same `hacs.json` format, so it also works with a legacy HACS installation).
 
-Or manually in HACS:
+[![Open your Home Assistant instance and open this repository in the Marketplace.](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=ggg1psyyy&repository=ha-referenzmarktwert&category=integration)
 
-1. Open **HACS** in Home Assistant.
-2. Open the menu (⋮, top right) → **Custom repositories**.
-3. Repository: `https://github.com/ggg1psyyy/ha-referenzmarktwert`, type **Integration** → **Add**.
-4. Search for **Referenzmarktwert PV**, open it and click **Download**.
-5. **Restart** Home Assistant.
+Or step by step:
+
+1. Open the **Marketplace** in Home Assistant. Adding a custom repository needs a **GitHub connection** in the
+   Marketplace (read-only, public information only) — the Marketplace asks for it if it is missing.
+2. Open the custom repositories
+   ([![Open the Marketplace custom repositories.](https://my.home-assistant.io/badges/marketplace_repositories.svg)](https://my.home-assistant.io/redirect/marketplace_repositories/))
+   and add `https://github.com/ggg1psyyy/ha-referenzmarktwert` with the category **Integration**.
+3. Open **Referenzmarktwert PV** in the Marketplace and install it.
+4. **Restart** Home Assistant when asked.
 
 ### Manual
 
@@ -81,7 +86,7 @@ Requires Python ≥ 3.14.2 (the current Home Assistant minimum). With [uv](https
 
 ```bash
 uv venv --python 3.14 .venv
-uv pip install --python .venv pytest pytest-asyncio aiohttp ruff
+uv pip install --python .venv pytest-homeassistant-custom-component==0.13.375 ruff
 .venv/bin/python -m pytest                       # offline tests (recorded data, local test server)
 RMW_LIVE=1 .venv/bin/python -m pytest -m live    # optional: against the real APIs
 .venv/bin/ruff check . && .venv/bin/ruff format --check .

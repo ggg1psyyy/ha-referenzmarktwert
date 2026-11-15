@@ -155,3 +155,8 @@ better mid-month, worse early, not adopted.
   responses and a local test server, opt-in live tests; ruff for lint/format.
 - 2026-11-15 — Hourly backtest of the whole estimate; prior's price level now moves to the running month's base price.
 - 2026-11-15 — Removed the seasonal-difference prior (worst method in both backtests); its backtest rows stay above.
+- 2026-11-15 — HACS is now the built-in **Marketplace** (HA 2026.11, core component `marketplace`, catalog
+  `hacs/default`, same `hacs.json` + `custom_components/<domain>/` format, My link `marketplace_repository`; the
+  old `hacs_repository` link redirects). README installation rewritten. Tests now run on Home Assistant's test plugin
+  (pytest-homeassistant-custom-component, newest release pins HA 2026.10.4), which blocks sockets: the local test
+  server uses `socket_enabled`, the live tests an `internet` fixture.

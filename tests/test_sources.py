@@ -150,8 +150,11 @@ def test_parse_xlsx_rejects_garbage(data: bytes) -> None:
 
 
 @pytest.fixture
-async def server():
-    """Serves the fixtures like the real APIs; `server.requests` records the query parameters."""
+async def server(socket_enabled: None):
+    """Serves the fixtures like the real APIs; `server.requests` records the query parameters.
+
+    Home Assistant's test plugin blocks sockets; `socket_enabled` allows them for these tests only.
+    """
     requests: list[tuple[str, dict[str, str]]] = []
 
     async def handle(request: web.Request) -> web.Response:
@@ -206,7 +209,7 @@ async def test_client_http_error(server: TestServer) -> None:
     assert caught.value.status == 500
 
 
-async def test_client_connection_refused() -> None:
+async def test_client_connection_refused(socket_enabled: None) -> None:
     config = EnergyChartsConfig(base_url="http://127.0.0.1:9", timeout=2)
     async with aiohttp.ClientSession() as session:
         with pytest.raises(SourceConnectionError):
@@ -226,7 +229,7 @@ live = pytest.mark.skipif(os.environ.get("RMW_LIVE") != "1", reason="set RMW_LIV
 
 @pytest.mark.live
 @live
-async def test_live_energy_charts() -> None:
+async def test_live_energy_charts(internet: None) -> None:
     start, end = 1759269600, 1759273200  # 2025-10-01 00:00..01:00 Vienna
     async with aiohttp.ClientSession() as session:
         client = EnergyChartsClient(session)
@@ -238,7 +241,7 @@ async def test_live_energy_charts() -> None:
 
 @pytest.mark.live
 @live
-async def test_live_econtrol() -> None:
+async def test_live_econtrol(internet: None) -> None:
     async with aiohttp.ClientSession() as session:
         values = await sources.fetch_econtrol(session)
     assert values[(2026, 10)].value == pytest.approx(0.1771)
