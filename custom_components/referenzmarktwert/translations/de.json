@@ -168,10 +168,10 @@
         "name": "Vergütung Schätzung laufender Monat"
       },
       "official": {
-        "name": "Offizieller Wert"
+        "name": "Offizieller Wert zuletzt veröffentlicht"
       },
       "payout_official": {
-        "name": "Vergütung offizieller Wert"
+        "name": "Vergütung offizieller Wert zuletzt veröffentlicht"
       },
       "expected_error": {
         "name": "Erwarteter Fehler der Schätzung"

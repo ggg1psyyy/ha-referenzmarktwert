@@ -168,10 +168,10 @@
         "name": "Payout estimate running month"
       },
       "official": {
-        "name": "Official value"
+        "name": "Official value latest"
       },
       "payout_official": {
-        "name": "Payout official value"
+        "name": "Payout official value latest"
       },
       "expected_error": {
         "name": "Expected error of the estimate"

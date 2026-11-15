@@ -330,4 +330,7 @@ better mid-month, worse early, not adopted.
     days (`schedule._slots`); tested over 60 days with 00:00, 00:03 and 23:58.
   - The whole-integration backtest is an opt-in test; its fake Energy-Charts server is the tests' shared one.
   - Icon: the euro sign's arc centred in the sun.
-
+- 2026-11-15 — Attributes renamed with group prefixes (`calc_`, `data_until_`, `previous_month_`, `range_`,
+  `month_`, `file_`): Home Assistant lists attributes sorted by name, so related values now stand together.
+- 2026-11-15 — The official-value sensors are named "… latest" ("… zuletzt veröffentlicht"): "official value" alone
+  was unclear, and "last month" would be wrong from the 1st until E-Control publishes (day 2–14).

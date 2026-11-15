@@ -1,6 +1,6 @@
 # Referenzmarktwert PV — Home Assistant integration
 
-> **Status: alpha — 0.1.1.**
+> **Status: alpha — 0.1.2.**
 > The sensors work; the Energy Dashboard compensation statistic is not implemented yet.
 
 A custom [Home Assistant](https://www.home-assistant.io/) integration (installed through the Marketplace) that computes the
@@ -45,15 +45,16 @@ against the real sources before it is saved.
 
 ## Sensors
 
-All values in **EUR/kWh**.
+All values in **EUR/kWh**. Attribute names start with their group (`calc_`, `data_until_`, `previous_month_`,
+`range_`, …), because Home Assistant lists attributes sorted by name.
 
 | Sensor | Value | Main attributes |
 |---|---|---|
-| Estimate running month | expected reference market value of the running month | `month`, `expected_error`, `low`/`high` (estimate ∓ expected error), `month_so_far`, `known_share`, `prior`, `previous_month` (+ `_source`: official/recomputed), `generation_until`, `prices_until`, `method` |
-| Payout estimate running month | estimate − deduction (the expected feed-in price) | `month`, `deduction`, `expected_error`, `low`/`high` |
+| Estimate running month | expected reference market value of the running month | `calc_known_share`, `calc_method`, `calc_month_so_far`, `calc_prior`, `calc_running_base_price`; `data_until_generation`, `data_until_prices`; `month`; `previous_month_source` (official/recomputed), `previous_month_value`; `range_error`, `range_high`, `range_low` (estimate ± expected error) |
+| Payout estimate running month | estimate − deduction (the expected feed-in price) | `deduction`, `month`, `range_error`, `range_high`, `range_low` |
 | Expected error of the estimate | how far off the estimate can be (one standard deviation, see below) | `month` |
-| Official value | latest value published by E-Control | `month`, `published`, `base_price`, `checked`, `history` (all months; not stored in the database) |
-| Payout official value | official value − deduction | `month`, `deduction` |
+| Official value latest | the latest month published by E-Control (normally last month; until it is published, the month before) | `file_checked`, `history` (all months; not stored in the database), `month`, `month_base_price`, `month_published` |
+| Payout official value latest | official value − deduction | `month`, `deduction` |
 
 ## Settings
 
@@ -93,7 +94,7 @@ documentation are written by Claude and reviewed by the maintainer. Commits are 
 | Download schedule (`schedule.py`: production window from the data, daily prices, conditional E-Control check) and stored data (`cache.py`) | done, tested |
 | Energy Dashboard compensation statistic, backfill, services | not started |
 | CI: hassfest, Marketplace (HACS) validation, lint and tests on every push (`.github/workflows/`) | done |
-| Releases | 0.1.0 (pre-release), 0.1.1 |
+| Releases | 0.1.0 (pre-release), 0.1.1, 0.1.2 |
 
 ### How the value is calculated
 
@@ -132,8 +133,8 @@ the day: mean of the absolute errors (largest in brackets).
 On the last day the error is only the difference between Energy-Charts' data and E-Control's own computation
 (at most 0.14 ct/kWh); in three months (2024-05, 2026-02, 2026-04) it stays just above 0.10 for that reason.
 
-**Expected error.** The estimate comes with how far off it can be: 2.25 ct/kWh × (1 − `known_share`) + 0.25 ct/kWh
-(both values are options), shown as `expected_error` with `low`/`high` and as its own sensor. Fitted on all days of
+**Expected error.** The estimate comes with how far off it can be: 2.25 ct/kWh × (1 − `calc_known_share`) + 0.25 ct/kWh
+(both values are options), shown as `range_error` with `range_low`/`range_high` and as its own sensor. Fitted on all days of
 2023-02..2026-10, each year left out in turn: 74 % of the real errors were within ± the expected error, 93 % within
 twice it (days 1–10: 71 %, 11–20: 72 %, 21–31: 79 %). It is the typical error, not a limit: in a month whose prices
 move unusually (December 2023, February 2026) the estimate can be off by twice as much for weeks.

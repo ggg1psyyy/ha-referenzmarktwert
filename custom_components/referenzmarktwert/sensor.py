@@ -43,11 +43,14 @@ class ReferenzmarktwertSensorDescription(SensorEntityDescription):
     attributes_fn: Callable[[ReferenzmarktwertData], dict[str, Any]] = lambda _: {}
 
 
+# Attribute names start with their group: Home Assistant lists attributes sorted by name.
+
+
 def _band(value: float | None, error: float | None) -> dict[str, Any]:
-    """The estimate +- its expected error (about 3 of 4 past months ended inside)."""
+    """The estimate +- its expected error (about 3 of 4 past daily estimates were inside)."""
     if value is None or error is None:
-        return {"expected_error": None, "low": None, "high": None}
-    return {"expected_error": error, "low": value - error, "high": value + error}
+        return {"range_error": None, "range_low": None, "range_high": None}
+    return {"range_error": error, "range_low": value - error, "range_high": value + error}
 
 
 def _estimate_attributes(data: ReferenzmarktwertData) -> dict[str, Any]:
@@ -55,15 +58,15 @@ def _estimate_attributes(data: ReferenzmarktwertData) -> dict[str, Any]:
     return {
         "month": month_text(e.month),
         **_band(e.value, e.expected_error),
-        "month_so_far": e.month_so_far,
-        "known_share": round(e.known_share, 4) if e.known_share is not None else None,
-        "prior": e.prior,
-        "running_base_price": e.running_base,
-        "previous_month": e.previous_month,
+        "calc_known_share": round(e.known_share, 4) if e.known_share is not None else None,
+        "calc_method": e.method.value,
+        "calc_month_so_far": e.month_so_far,
+        "calc_prior": e.prior,
+        "calc_running_base_price": e.running_base,
+        "data_until_generation": timestamp(e.generation_until),
+        "data_until_prices": timestamp(e.prices_until),
         "previous_month_source": e.previous_source.value,
-        "generation_until": timestamp(e.generation_until),
-        "prices_until": timestamp(e.prices_until),
-        "method": e.method.value,
+        "previous_month_value": e.previous_month,
     }
 
 
@@ -73,9 +76,9 @@ def _official_attributes(data: ReferenzmarktwertData) -> dict[str, Any]:
         return {}
     return {
         "month": month_text(latest.month),
-        "published": latest.published.isoformat() if latest.published else None,
-        "base_price": latest.base,
-        "checked": data.official_checked.isoformat() if data.official_checked else None,
+        "month_published": latest.published.isoformat() if latest.published else None,
+        "month_base_price": latest.base,
+        "file_checked": data.official_checked.isoformat() if data.official_checked else None,
         "history": {month_text(m): v.value for m, v in sorted(data.official.items())},
     }
 

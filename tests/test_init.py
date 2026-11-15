@@ -83,27 +83,39 @@ async def test_setup_creates_sensors(hass: HomeAssistant, config_entry: MockConf
     assert estimate.attributes["state_class"] == "measurement"
     assert estimate.attributes["month"] == "2026-10"
     assert estimate.attributes["previous_month_source"] == "official"
-    assert estimate.attributes["known_share"] == 1.0  # reference month (October 2025) was used
+    assert estimate.attributes["calc_known_share"] == 1.0  # reference month (October 2025) was used
 
-    assert estimate.attributes["expected_error"] == pytest.approx(0.0025)  # whole month known: only the rest
-    assert estimate.attributes["low"] == pytest.approx(float(estimate.state) - 0.0025, abs=1e-6)
-    assert estimate.attributes["high"] == pytest.approx(float(estimate.state) + 0.0025, abs=1e-6)
+    assert estimate.attributes["range_error"] == pytest.approx(0.0025)  # whole month known: only the rest
+    assert estimate.attributes["range_low"] == pytest.approx(float(estimate.state) - 0.0025, abs=1e-6)
+    assert estimate.attributes["range_high"] == pytest.approx(float(estimate.state) + 0.0025, abs=1e-6)
 
     payout = hass.states.get("sensor.referenzmarktwert_pv_payout_estimate_running_month")
     assert float(payout.state) == pytest.approx(0.1771 - 0.015, abs=0.0001)
-    assert payout.attributes["high"] - payout.attributes["low"] == pytest.approx(2 * 0.0025)  # same width
-    assert payout.attributes["low"] == pytest.approx(estimate.attributes["low"] - 0.015)
+    assert payout.attributes["range_high"] - payout.attributes["range_low"] == pytest.approx(2 * 0.0025)  # same width
+    assert payout.attributes["range_low"] == pytest.approx(estimate.attributes["range_low"] - 0.015)
 
     error = hass.states.get("sensor.referenzmarktwert_pv_expected_error_of_the_estimate")
     assert float(error.state) == pytest.approx(0.0025)
     assert error.attributes["unit_of_measurement"] == "EUR/kWh"
 
-    official = hass.states.get("sensor.referenzmarktwert_pv_official_value")
+    official = hass.states.get("sensor.referenzmarktwert_pv_official_value_latest")
     assert float(official.state) == pytest.approx(0.1771)
     assert official.attributes["month"] == "2026-10"
-    assert official.attributes["published"] == "2026-11-04"
+    assert official.attributes["month_published"] == "2026-11-04"
     assert official.attributes["history"]["2022-01"] == pytest.approx(0.206)
-    assert float(hass.states.get("sensor.referenzmarktwert_pv_payout_official_value").state) == pytest.approx(0.1621)
+    # names start with their group: Home Assistant sorts attributes by name
+    assert sorted(estimate.attributes) == [
+        "calc_known_share", "calc_method", "calc_month_so_far", "calc_prior", "calc_running_base_price",
+        "data_until_generation", "data_until_prices", "friendly_name", "month",
+        "previous_month_source", "previous_month_value", "range_error", "range_high", "range_low",
+        "state_class", "unit_of_measurement",
+    ]  # fmt: skip
+    assert sorted(official.attributes) == [
+        "file_checked", "friendly_name", "history", "month", "month_base_price", "month_published",
+        "state_class", "unit_of_measurement",
+    ]  # fmt: skip
+    payout_official = hass.states.get("sensor.referenzmarktwert_pv_payout_official_value_latest")
+    assert float(payout_official.state) == pytest.approx(0.1621)
 
     registry = er.async_get(hass)
     assert registry.async_get("sensor.referenzmarktwert_pv_estimate_running_month").unique_id == (
@@ -246,7 +258,7 @@ async def test_econtrol_only_downloaded_if_changed(
     checks = [headers for _, url, _, headers in energy_charts.mock_calls if str(url) == DEFAULT_ECONTROL_XLSX_URL]
     assert checks
     assert all(h["If-Modified-Since"] == LAST_MODIFIED for h in checks)
-    official = hass.states.get("sensor.referenzmarktwert_pv_official_value")
+    official = hass.states.get("sensor.referenzmarktwert_pv_official_value_latest")
     assert float(official.state) == pytest.approx(0.1771)  # the stored table is kept
 
 
@@ -303,14 +315,14 @@ async def test_econtrol_failure_is_retried_on_next_update(
     energy_charts.get(GENERATION_URL, json=fixture_json("public_power_at_2026-10.json"))
     energy_charts.get(DEFAULT_ECONTROL_XLSX_URL, status=503)
     await setup(hass, config_entry)
-    assert hass.states.get("sensor.referenzmarktwert_pv_official_value").state == "unknown"
+    assert hass.states.get("sensor.referenzmarktwert_pv_official_value_latest").state == "unknown"
 
     energy_charts.clear_requests()
     energy_charts.get(PRICE_URL, json=fixture_json("price_at_2026-10.json"))
     energy_charts.get(GENERATION_URL, json=fixture_json("public_power_at_2026-10.json"))
     energy_charts.get(DEFAULT_ECONTROL_XLSX_URL, content=(FIXTURES / "Referenzmarktwert_Entwicklung.xlsx").read_bytes())
     await wait_until(hass, freezer, "2026-10-31T22:31:00+00:00")  # an hour later, not a day
-    assert float(hass.states.get("sensor.referenzmarktwert_pv_official_value").state) == pytest.approx(0.1771)
+    assert float(hass.states.get("sensor.referenzmarktwert_pv_official_value_latest").state) == pytest.approx(0.1771)
 
 
 @pytest.mark.freeze_time(NOW)
@@ -327,7 +339,7 @@ async def test_econtrol_outage_keeps_estimate(
     assert float(hass.states.get("sensor.referenzmarktwert_pv_estimate_running_month").state) == pytest.approx(
         0.1771, abs=0.0001
     )
-    assert hass.states.get("sensor.referenzmarktwert_pv_official_value").state == "unknown"
+    assert hass.states.get("sensor.referenzmarktwert_pv_official_value_latest").state == "unknown"
     assert "E-Control file not available" in caplog.text
 
 
@@ -444,14 +456,14 @@ async def test_econtrol_failure_is_retried_after_a_reload(
     every interval, not only a day later."""
     fake_sources(aioclient_mock, b"not available")  # E-Control answers with garbage
     await setup(hass, config_entry)
-    assert hass.states.get("sensor.referenzmarktwert_pv_official_value").state == "unknown"
+    assert hass.states.get("sensor.referenzmarktwert_pv_official_value_latest").state == "unknown"
     assert await hass.config_entries.async_reload(config_entry.entry_id)
     await hass.async_block_till_done()
 
     aioclient_mock.clear_requests()
     fake_sources(aioclient_mock, econtrol_xlsx())
     await wait_until(hass, freezer, "2026-10-31T22:31:00+00:00")  # an hour later
-    assert float(hass.states.get("sensor.referenzmarktwert_pv_official_value").state) == pytest.approx(0.1771)
+    assert float(hass.states.get("sensor.referenzmarktwert_pv_official_value_latest").state) == pytest.approx(0.1771)
 
 
 @pytest.mark.freeze_time("2026-09-30T10:00:00+00:00")  # 12:00 Vienna; E-Control has published August
@@ -482,8 +494,8 @@ async def test_month_change(
     estimate = hass.states.get("sensor.referenzmarktwert_pv_estimate_running_month")
     assert estimate.attributes["month"] == "2026-10"
     assert estimate.attributes["previous_month_source"] == "recomputed"  # from the stored September
-    assert estimate.attributes["previous_month"] == pytest.approx(0.1053, abs=0.0001)
-    assert estimate.attributes["prices_until"] == datetime.fromtimestamp(OCTOBER[0] + 86400, UTC).isoformat()
+    assert estimate.attributes["previous_month_value"] == pytest.approx(0.1053, abs=0.0001)
+    assert estimate.attributes["data_until_prices"] == datetime.fromtimestamp(OCTOBER[0] + 86400, UTC).isoformat()
 
     # 02:00: the nightly full download includes September (not official yet)
     aioclient_mock.mock_calls.clear()
