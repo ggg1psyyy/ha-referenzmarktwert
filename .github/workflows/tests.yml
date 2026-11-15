@@ -1,0 +1,27 @@
+# Lint and the offline test suite (recorded data; the live tests are opt-in and do not run here).
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - name: Install
+        run: |
+          uv venv --python 3.14 .venv
+          uv pip install --python .venv --group dev
+      - name: Lint
+        run: |
+          .venv/bin/ruff check .
+          .venv/bin/ruff format --check .
+      - name: Test
+        run: .venv/bin/python -m pytest

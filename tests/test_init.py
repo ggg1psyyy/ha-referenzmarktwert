@@ -350,3 +350,28 @@ async def test_month_change(
     aioclient_mock.mock_calls.clear()
     await wait_until(hass, freezer, "2026-10-01T00:05:00+00:00")
     assert requests_to(aioclient_mock, GENERATION_URL)[0]["start"] == september[0]
+
+
+@pytest.mark.freeze_time(NOW)
+async def test_deprecation_notice(hass: HomeAssistant, config_entry: MockConfigEntry, aioclient_mock) -> None:
+    """Energy-Charts announces the end of an endpoint with "deprecated": true: a repair notice appears."""
+    from homeassistant.helpers import issue_registry as ir
+
+    generation = {**fixture_json("public_power_at_2026-10.json"), "deprecated": True}
+    price = {**fixture_json("price_at_2026-10.json"), "deprecated": True}
+    aioclient_mock.get(GENERATION_URL, json=generation)
+    aioclient_mock.get(PRICE_URL, json=price)
+    aioclient_mock.get(DEFAULT_ECONTROL_XLSX_URL, content=econtrol_xlsx())
+    await setup(hass, config_entry)
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, f"energy_charts_deprecated_{config_entry.entry_id}")
+    assert issue is not None
+    assert issue.translation_key == "energy_charts_deprecated"
+    assert config_entry.state is ConfigEntryState.LOADED  # it still works
+
+
+@pytest.mark.freeze_time(NOW)
+async def test_no_deprecation_notice(hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts) -> None:
+    from homeassistant.helpers import issue_registry as ir
+
+    await setup(hass, config_entry)
+    assert ir.async_get(hass).async_get_issue(DOMAIN, f"energy_charts_deprecated_{config_entry.entry_id}") is None

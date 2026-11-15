@@ -188,6 +188,9 @@ class EnergyChartsClient:
     def __init__(self, session: aiohttp.ClientSession, config: EnergyChartsConfig | None = None) -> None:
         self._session = session
         self.config = config or EnergyChartsConfig()
+        # Energy-Charts announces the end of an endpoint at least six months ahead by setting
+        # "deprecated": true in its answers; the latest answer's flag is kept here.
+        self.deprecated = False
 
     async def _fetch(self, path: str, params: dict[str, str | int], what: str) -> Any | None:
         """The JSON answer, or None if the window holds no data yet (HTTP 404 "no content available")."""
@@ -204,7 +207,10 @@ class EnergyChartsClient:
             if err.status == 404 and NO_CONTENT in str(err):
                 return None
             raise
-        return _json(result.body or b"", what)
+        payload = _json(result.body or b"", what)
+        if isinstance(payload, dict):
+            self.deprecated = payload.get("deprecated") is True
+        return payload
 
     async def generation(self, start: int, end: int) -> list[tuple[int, float | None]]:
         """Generation of the configured production type, quarter-hourly, MW. `end` is inclusive."""

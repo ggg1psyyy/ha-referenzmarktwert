@@ -179,5 +179,11 @@
     "invalid_time_zone": {
       "message": "Unbekannte Zeitzone {time_zone}"
     }
+  },
+  "issues": {
+    "energy_charts_deprecated": {
+      "title": "Energy-Charts-API wird eingestellt",
+      "description": "Energy-Charts kennzeichnet die von dieser Integration verwendeten API-Endpunkte als veraltet. Sie funktionieren nach der Ankündigung noch mindestens sechs Monate; bitte die Integration Referenzmarktwert in dieser Zeit aktualisieren (oder im Issue-Tracker melden, falls es kein Update gibt)."
+    }
   }
 }

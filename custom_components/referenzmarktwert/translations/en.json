@@ -179,5 +179,11 @@
     "invalid_time_zone": {
       "message": "Unknown time zone {time_zone}"
     }
+  },
+  "issues": {
+    "energy_charts_deprecated": {
+      "title": "Energy-Charts API will be retired",
+      "description": "Energy-Charts marks the API endpoints this integration uses as deprecated. They keep working for at least six months after the announcement; please update the Referenzmarktwert integration in that time (or report it in its issue tracker if no update is available)."
+    }
   }
 }

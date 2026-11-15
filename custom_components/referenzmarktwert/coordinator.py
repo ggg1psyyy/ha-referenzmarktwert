@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryError
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.sun import get_astral_event_date
@@ -345,10 +346,28 @@ class ReferenzmarktwertCoordinator(DataUpdateCoordinator[ReferenzmarktwertData])
             return self._failed(err, "rate_limited", retry_after=wait)
         except SourceError as err:
             return self._failed(err, "energy_charts_failed")
-        if self._energy_charts_failing and tasks & schedule.ENERGY_CHARTS_TASKS:
-            _LOGGER.info("Energy-Charts available again")
-            self._energy_charts_failing = False
+        if tasks & schedule.ENERGY_CHARTS_TASKS:
+            if self._energy_charts_failing:
+                _LOGGER.info("Energy-Charts available again")
+                self._energy_charts_failing = False
+            self._report_deprecation()
         return None
+
+    def _report_deprecation(self) -> None:
+        """Show a repair notice while Energy-Charts marks the endpoints as deprecated (six months' notice)."""
+        issue_id = f"energy_charts_deprecated_{self.config_entry.entry_id}"
+        if self._energy_charts.deprecated:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="energy_charts_deprecated",
+                learn_more_url="https://api.energy-charts.info/",
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
 
     def _failed(self, err: SourceError, key: str, retry_after: float | None = None) -> UpdateFailed:
         if not self._energy_charts_failing:

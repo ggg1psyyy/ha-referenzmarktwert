@@ -90,7 +90,8 @@ documentation are written by Claude and reviewed by the maintainer. Commits are 
 | HA integration: setup/reconfigure/options flows, coordinator, sensors, diagnostics | done, tested |
 | Download schedule (`schedule.py`: daylight window, daily prices, conditional E-Control check) and stored data (`cache.py`) | done, tested |
 | Energy Dashboard compensation statistic, backfill, services | not started |
-| Release, CI (hassfest, Marketplace/HACS validation, tests) | not started |
+| CI: hassfest, Marketplace (HACS) validation, lint and tests on every push (`.github/workflows/`) | done |
+| First release | not started |
 
 ### How the value is calculated
 
@@ -125,6 +126,8 @@ RMW_LIVE=1 .venv/bin/python -m pytest -m live    # optional: against the real AP
 .venv/bin/ruff check . && .venv/bin/ruff format --check .
 ```
 
+GitHub Actions run hassfest, the Marketplace (HACS) validation, lint and the offline tests on every push.
+
 See [ARCHITECTURE.md](ARCHITECTURE.md) for design decisions and their reasons.
 
 ## Downloads
@@ -140,6 +143,9 @@ settings. `start`/`end` are Unix seconds.
 | Day-ahead prices (EUR/MWh) | `https://api.energy-charts.info/price?bzn=AT&start=…&end=…` | **once a day** after the auction (from 13:30, again every 30 min until tomorrow's prices are there); at once if today's are missing |
 | PV generation of the same month last year (for the expected generation share) | `https://api.energy-charts.info/public_power?country=at&start=…&end=…` | once a month |
 | Official values | `https://www.e-control.at/documents/1785851/10823410/Referenzmarktwert_Entwicklung.xlsx` | checked daily, every 3 h until the 15th while last month's value is awaited; transferred **only if it changed** (`If-Modified-Since`; otherwise the server answers `304 Not Modified` without content) |
+
+If Energy-Charts ever marks these endpoints as deprecated (it announces that at least six months ahead in every
+answer), the integration shows a repair notice in Home Assistant.
 
 Generation outside the daylight window is zero or nearly so (a few MW at dawn and dusk, about 0.05 % of a month's
 energy); the next download fetches those points too, so nothing is lost. Downloads are stored in Home Assistant's

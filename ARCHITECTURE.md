@@ -121,7 +121,8 @@ tests/             # pytest, recorded responses as fixtures
   attribute is excluded from the recorder. Diagnostics redact the optional header value.
 - Brand image in `custom_components/referenzmarktwert/brand/` (supported since HA 2026.3), drawn by
   `tools/make_icon.py`.
-- hassfest could not be run locally (it executes HA core's scripts); it will run in CI.
+- hassfest could not be run locally (it executes HA core's scripts); it runs in CI (GitHub Actions: hassfest,
+  `hacs/action` with category integration, ruff + pytest; dependabot keeps the actions current).
 - **Schemas use `probatio`**, not `voluptuous`: Home Assistant 2026.10 replaced voluptuous (all core flows import
   probatio, `homeassistant` only requires `probatio`; voluptuous is merely pulled in by test tools). A test runs all
   three forms through the serializer of HA's flow HTTP views (`probatio.to_field_list`).
@@ -170,7 +171,10 @@ for prices, E-Control, the month change — and a long daytime interval cannot s
 - The step of a series is taken from the data (`calc.resolution`), not assumed to be 15 min: with hourly prices the
   coverage would otherwise look incomplete and the prices would be fetched every 30 min.
 - Energy-Charts has had `/v2/...` twins of every endpoint since 2026-07-20; v1 "remains unchanged", and neither
-  version can return a single production type — so `public_power` stays on v1 and always carries all types.
+  version can return a single production type — so `public_power` stays on v1 and always carries all types. v2
+  answers are ~3× larger (one object per quarter-hour with ISO time stamps and series names). Energy-Charts announces
+  the end of an endpoint at least six months ahead with `"deprecated": true` in every answer: the integration then
+  raises a repair issue (`energy_charts_deprecated`), so there is time to switch.
 
 ### Test data and licenses
 
@@ -251,3 +255,5 @@ better mid-month, worse early, not adopted.
   prices once a day, E-Control only if changed (`If-Modified-Since`), downloads stored across restarts, new options
   (window offsets, overlap, full-download time, price time and retry, early-check days, E-Control header); README
   lists every request and the data licenses; the E-Control fixture is generated instead of copied.
+- 2026-11-15 — CI workflows (hassfest, Marketplace/HACS validation, lint, tests); repair notice when Energy-Charts
+  marks its endpoints as deprecated; repository topics set.
