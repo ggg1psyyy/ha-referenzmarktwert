@@ -164,16 +164,13 @@ def prior(
     are known, see `time_share`). If the chosen method lacks data, it falls back to the previous
     month's value; None if even that is missing.
     """
-    prev, last_year, last_year_prev = (shift_month(month, d) for d in (-1, -12, -13))
+    prev, last_year = shift_month(month, -1), shift_month(month, -12)
     fallback = pv.get(prev)
     match method:
         case PriorMethod.BASE_X_CAPTURE_RATE:
             level = _price_level(base.get(prev), running_base, running_weight)
             if level is not None and last_year in pv and base.get(last_year):
                 return level * pv[last_year] / base[last_year]
-        case PriorMethod.SEASONAL_DIFFERENCE:
-            if fallback is not None and last_year in pv and last_year_prev in pv:
-                return fallback + pv[last_year] - pv[last_year_prev]
         case PriorMethod.PREVIOUS_MONTH:
             pass
     return fallback

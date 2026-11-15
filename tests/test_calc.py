@@ -118,11 +118,10 @@ def test_shift_month() -> None:
 
 
 def test_prior_methods() -> None:
-    pv = {(2025, 9): 4.0, (2025, 10): 8.0, (2026, 9): 10.0}
+    pv = {(2025, 10): 8.0, (2026, 9): 10.0}
     base = {(2025, 10): 10.0, (2026, 9): 20.0}
     month = (2026, 10)
     assert calc.prior(month, pv, base, PriorMethod.PREVIOUS_MONTH) == 10.0
-    assert calc.prior(month, pv, base, PriorMethod.SEASONAL_DIFFERENCE) == 10.0 + 8.0 - 4.0
     assert calc.prior(month, pv, base, PriorMethod.BASE_X_CAPTURE_RATE) == 20.0 * 8.0 / 10.0
     assert calc.prior(month, pv, base) == 16.0  # default method
 
@@ -130,7 +129,6 @@ def test_prior_methods() -> None:
 def test_prior_falls_back_to_previous_month() -> None:
     pv = {(2026, 9): 10.0}
     assert calc.prior((2026, 10), pv, {}, PriorMethod.BASE_X_CAPTURE_RATE) == 10.0
-    assert calc.prior((2026, 10), pv, {}, PriorMethod.SEASONAL_DIFFERENCE) == 10.0
     assert calc.prior((2026, 10), {}, {}) is None
 
 
@@ -148,7 +146,6 @@ def test_backtest_default_prior_beats_alternatives() -> None:
     results = {method: rmse(method) for method in PriorMethod}
     assert results[PriorMethod.BASE_X_CAPTURE_RATE] == pytest.approx(2.17, abs=0.01)
     assert results[PriorMethod.PREVIOUS_MONTH] == pytest.approx(2.67, abs=0.01)
-    assert results[PriorMethod.SEASONAL_DIFFERENCE] == pytest.approx(6.39, abs=0.01)
     assert min(results, key=results.get) == calc.DEFAULT_PRIOR_METHOD
 
 

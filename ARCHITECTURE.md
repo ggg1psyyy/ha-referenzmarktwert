@@ -86,8 +86,8 @@ tests/             # pytest, recorded responses as fixtures
 - **Prior = price level × last year's capture rate of this calendar month** (capture rate = PV value / day-ahead
   base price, both from the E-Control file). The price level starts at the previous month's base price and moves to
   the running month's base price so far (including tomorrow's known day-ahead prices), weighted by the share of the
-  month whose prices are known. Configurable (`PriorMethod`); alternatives: previous month as is, previous month +
-  last year's month-to-month change. Falls back to the previous month if data is missing. Until the previous month
+  month whose prices are known. Configurable (`PriorMethod`); alternative: previous month as is. ("Previous month +
+  last year's month-to-month change" was tested and removed: worst in every backtest.) Falls back to the previous month if data is missing. Until the previous month
   is published (2nd–7th), its PV value and base price are recomputed from Energy-Charts.
   See "Backtests of the estimate" below.
 - **Official value wins.** Once E-Control publishes a month, it replaces the estimate for good.
@@ -154,3 +154,4 @@ better mid-month, worse early, not adopted.
 - 2026-11-15 — Milestone 2: `sources.py` (Energy-Charts client, E-Control xlsx parser), tests against recorded
   responses and a local test server, opt-in live tests; ruff for lint/format.
 - 2026-11-15 — Hourly backtest of the whole estimate; prior's price level now moves to the running month's base price.
+- 2026-11-15 — Removed the seasonal-difference prior (worst method in both backtests); its backtest rows stay above.

@@ -22,8 +22,8 @@ class PriorMethod(StrEnum):
     """How the not-yet-known rest of the month is estimated (the "prior" of the blend).
 
     Backtests (see ARCHITECTURE.md): monthly history 2023-02..2026-10, RMSE ct/kWh:
-    BASE_X_CAPTURE_RATE 2.17, PREVIOUS_MONTH 2.67, SEASONAL_DIFFERENCE 6.39. Hourly, whole estimate
-    on day 1/10/20: 2.17/1.69/1.10 vs 2.70/2.18/1.39 vs 6.27/4.51/2.40.
+    BASE_X_CAPTURE_RATE 2.17, PREVIOUS_MONTH 2.67. Hourly, whole estimate on day 1/10/20:
+    2.17/1.69/1.10 vs 2.70/2.18/1.39.
     """
 
     # price level (previous month's base, moving to the running month's) x the same calendar
@@ -31,8 +31,6 @@ class PriorMethod(StrEnum):
     BASE_X_CAPTURE_RATE = "base_x_capture_rate"
     # previous month's PV value as is
     PREVIOUS_MONTH = "previous_month"
-    # previous month's PV value + last year's change from that month to this one
-    SEASONAL_DIFFERENCE = "seasonal_difference"
 
 
 DEFAULT_PRIOR_METHOD: Final = PriorMethod.BASE_X_CAPTURE_RATE

@@ -93,7 +93,6 @@ def main() -> None:
     methods = {
         "month so far only": None,
         "previous month": calc.PriorMethod.PREVIOUS_MONTH,
-        "seasonal difference": calc.PriorMethod.SEASONAL_DIFFERENCE,
         "base x capture rate, previous base only": "prev-only",
         "base x capture rate (default)": calc.PriorMethod.BASE_X_CAPTURE_RATE,
     }
