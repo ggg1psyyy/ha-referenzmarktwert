@@ -153,10 +153,12 @@ for prices, E-Control, the month change — and a long daytime interval cannot s
   is published (2 h lag); the end + 2.5 h covers the lag plus the largest observed day-to-day shift. In October
   2026 10 points of 4–8 MW (0.003 % of the energy) were published outside their window: the morning ones still come
   with the window's first download (every download starts at the **last stored point minus an overlap**, 3 h), the
-  evening ones with the nightly full download — which also refreshes yesterday before the next window is derived,
-  so the window cannot creep (test with days growing 30 min each). Times are moved by whole days of 86400 s, not by
+  evening ones with the nightly full download. Both downloads also bring yesterday's late values before today's
+  window is used, so the window cannot creep (test: days growing 45 min each, more than the end margin; it passes
+  even without the nightly full download, the morning's first download alone suffices). Times are moved by whole days of 86400 s, not by
   the clock: the sun keeps UTC (25 Oct 2026, CEST → CET: the window is an hour earlier on the clock, as the recorded
-  data is). Yesterday is always downloaded (also on the 1st when the previous month is official), a window past
+  data is). The first download always reaches back to yesterday (a guard: on the 1st the previous month is
+  normally still unofficial and downloaded anyway), a window past
   midnight is handled by also looking at yesterday's window, and without any generation data there is no gating.
 - **One full download per night** (02:00, option) of the running month — plus the previous month while it is not
   official — as a safety net in case Energy-Charts revises older values (not observed yet; not verifiable from one

@@ -153,8 +153,9 @@ of a day that produces longer than the day before arrive with the next download,
 `.storage` folder, so a restart or reload costs no downloads; the previous month needs no extra download either (it was
 the running month). If that file cannot be read (damaged, or from another version of the integration), the data is
 simply downloaded again; deleting the entry deletes the file. The connection test in setup and reconfigure makes three small requests: generation of one day,
-prices of one day, and the E-Control file. Per day: about 15–18 small Energy-Charts requests in autumn, more around June (longer days), and one
-E-Control check.
+prices of one day, and the E-Control file. Per day (simulated with the recorded data and the default settings): 16 generation downloads on 15 October, 18 on
+15 September, plus 1–2 price downloads and one E-Control check; around June it will be more (longer days, not
+measured yet).
 
 ## Data sources and licenses
 

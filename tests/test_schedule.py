@@ -152,18 +152,21 @@ def test_window_follows_the_sun_over_the_clock_change() -> None:
 
 
 def test_no_creeping_with_longer_days() -> None:
-    """Each day the PV produces 30 min longer than the day before; the window follows, and every
-    day's last generation is stored before the next window is computed (the nightly full download)."""
+    """Each day the PV produces 45 min longer than the day before: more than the end offset leaves
+    after the 2 h lag (30 min), so the evening's last values are published after the window closed.
+    They are fetched before the next window is used (by the nightly full download, and again by the
+    morning's first download, which starts at the last stored point): the window follows."""
     lag = 2 * 3600
 
     def generation_of(day: date) -> list[tuple[int, float | None]]:
         n = (day - date(2026, 3, 1)).days
-        first = datetime.combine(day, time(7), TZ) - timedelta(minutes=30 * n)
-        last = datetime.combine(day, time(17), TZ) + timedelta(minutes=30 * n)
+        first = datetime.combine(day, time(7), TZ) - timedelta(minutes=45 * n)
+        last = datetime.combine(day, time(17), TZ) + timedelta(minutes=45 * n)
         return [(int(first.timestamp()) + 900 * i, 5.0) for i in range(int((last - first).total_seconds()) // 900 + 1)]
 
     truth = [p for d in range(8) for p in generation_of(date(2026, 3, 1) + timedelta(days=d))]
     stored: dict[int, float | None] = {}
+    checked: set[date] = set()
     settings = replace(S, start_offset=2 * 3600, end_offset=150 * 60)
     now = at("2026-03-02T00:30")
     st = status(full_refresh=now, generation_attempt=now, production=None)
@@ -177,10 +180,13 @@ def test_no_creeping_with_longer_days() -> None:
             st = replace(st, generation_attempt=now, full_refresh=now if Task.FULL in tasks else st.full_refresh)
         if Task.OFFICIAL in tasks:
             st = replace(st, official_attempt=now)
-        # the window always comes from yesterday's complete generation
-        yesterday = today - timedelta(days=1)
-        assert st.production == production_hours(generation_of(yesterday), TZ, today)
+        # while the window is in use, it comes from yesterday's complete generation
+        if production_window(now, TZ, st.production, settings).inside:
+            complete = production_hours(generation_of(today - timedelta(days=1)), TZ, today)
+            assert production_hours(sorted(stored.items()), TZ, today) == complete
+            checked.add(today)
         now = plan(now, TZ, settings, st).next_run
+    assert len(checked) == 6  # every day
 
 
 @pytest.mark.parametrize(
