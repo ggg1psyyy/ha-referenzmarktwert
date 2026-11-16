@@ -339,3 +339,8 @@ better mid-month, worse early, not adopted.
   script, else from the English name, "because entity IDs must use lowercase letters, numbers, and underscores"
   (home-assistant.io/docs/configuration/customizing-devices). Registered entities keep their IDs; the device's
   *Recreate entity IDs* applies the new ones.
+- 2026-11-16 — Range width option (default 1 expected error) and the range's bounds as sensors (estimate and payout,
+  low/high), disabled by default (`entity_registry_enabled_default=False`): for a cautious calculation with the low
+  value without adding four entities to every installation. The width is applied once, in `estimate_month`
+  (`Estimate.range_error`); the main sensors' `range_*` attributes and the bound sensors use that one value. The
+  expected error itself (its sensor) stays one standard deviation.

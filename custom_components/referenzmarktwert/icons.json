@@ -3,6 +3,10 @@
     "sensor": {
       "estimate": { "default": "mdi:solar-power-variant" },
       "payout_estimate": { "default": "mdi:cash-plus" },
+      "estimate_low": { "default": "mdi:arrow-collapse-down" },
+      "estimate_high": { "default": "mdi:arrow-collapse-up" },
+      "payout_estimate_low": { "default": "mdi:arrow-collapse-down" },
+      "payout_estimate_high": { "default": "mdi:arrow-collapse-up" },
       "expected_error": { "default": "mdi:plus-minus-variant" },
       "official": { "default": "mdi:certificate-outline" },
       "payout_official": { "default": "mdi:cash-check" }

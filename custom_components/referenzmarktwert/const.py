@@ -41,6 +41,8 @@ DEFAULT_PRIOR_METHOD: Final = PriorMethod.BASE_X_CAPTURE_RATE
 # were within +-1 expected error, 93 % within +-2. EUR/kWh.
 DEFAULT_ERROR_AT_START_EUR_PER_KWH: Final = 0.0225
 DEFAULT_ERROR_AT_END_EUR_PER_KWH: Final = 0.0025
+# The range shown (low/high) is the estimate +- this many expected errors (1: ~3 of 4 days inside, 2: ~93 %).
+DEFAULT_RANGE_WIDTH: Final = 1.0
 
 # --- Energy-Charts (Fraunhofer ISE), data licensed CC BY 4.0 ---------------------------------
 DEFAULT_ENERGY_CHARTS_BASE_URL: Final = "https://api.energy-charts.info"
@@ -135,6 +137,7 @@ CONF_OFFICIAL_EARLY_DAYS: Final = "official_early_days"
 CONF_SPREAD: Final = "spread_minutes"
 CONF_ERROR_AT_START: Final = "expected_error_at_start"
 CONF_ERROR_AT_END: Final = "expected_error_at_end"
+CONF_RANGE_WIDTH: Final = "range_width"
 
 DEFAULT_DATA: Final = {
     CONF_ENERGY_CHARTS_URL: DEFAULT_ENERGY_CHARTS_BASE_URL,
@@ -162,6 +165,7 @@ DEFAULT_OPTIONS: Final = {
     CONF_AGGREGATION_SECONDS: DEFAULT_AGGREGATION_SECONDS,
     CONF_ERROR_AT_START: DEFAULT_ERROR_AT_START_EUR_PER_KWH,
     CONF_ERROR_AT_END: DEFAULT_ERROR_AT_END_EUR_PER_KWH,
+    CONF_RANGE_WIDTH: DEFAULT_RANGE_WIDTH,
     CONF_UPDATE_INTERVAL: DEFAULT_UPDATE_INTERVAL_MINUTES,
     CONF_START_OFFSET: DEFAULT_START_OFFSET_MINUTES,
     CONF_END_OFFSET: DEFAULT_END_OFFSET_MINUTES,

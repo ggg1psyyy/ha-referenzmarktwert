@@ -127,7 +127,8 @@
           "request_delay_seconds": "Pause zwischen Anfragen",
           "spread_minutes": "Zufällige Streuung der Downloadzeiten",
           "expected_error_at_start": "Erwarteter Fehler am Monatsanfang",
-          "expected_error_at_end": "Erwarteter Fehler am Monatsende"
+          "expected_error_at_end": "Erwarteter Fehler am Monatsende",
+          "range_width": "Breite des Bereichs (erwartete Fehler)"
         },
         "data_description": {
           "deduction": "Wird für die Vergütungs-Sensoren vom Marktwert abgezogen (Hofer Sonne: 0,015 EUR/kWh).",
@@ -146,7 +147,8 @@
           "request_delay_seconds": "Energy-Charts begrenzt, wie oft es abgefragt werden darf.",
           "spread_minutes": "Die geplanten Downloadzeiten (Beginn und Ende des Erzeugungsfensters, nächtlicher Komplett-Download, Preise nach der Auktion, Vorjahresmonat nach dem Monatswechsel) verschieben sich um einen zufälligen Wert in diesem Bereich, jeden Tag neu, damit nicht alle Installationen Energy-Charts in derselben Sekunde abfragen. 0: aus.",
           "expected_error_at_start": "Erwarteter Fehler (eine Standardabweichung) der Schätzung, bevor etwas vom Monat bekannt ist. Er sinkt mit dem bekannten Anteil der PV-Energie des Monats. Standard aus 45 Monaten Historie: etwa 3 von 4 Monaten endeten innerhalb von Schätzung ± diesem Fehler.",
-          "expected_error_at_end": "Was bleibt, wenn der ganze Monat bekannt ist: E-Controls eigene Berechnung weicht etwas von den Daten ab."
+          "expected_error_at_end": "Was bleibt, wenn der ganze Monat bekannt ist: E-Controls eigene Berechnung weicht etwas von den Daten ab.",
+          "range_width": "Der angezeigte Bereich (range_low/range_high und die Sensoren untere/obere Grenze) ist die Schätzung ± so viele erwartete Fehler. 1: etwa 3 von 4 bisherigen täglichen Schätzungen lagen darin, 2: etwa 93 %."
         }
       }
     }
@@ -166,6 +168,18 @@
       },
       "payout_estimate": {
         "name": "Vergütung Schätzung laufender Monat"
+      },
+      "estimate_low": {
+        "name": "Schätzung laufender Monat untere Grenze"
+      },
+      "estimate_high": {
+        "name": "Schätzung laufender Monat obere Grenze"
+      },
+      "payout_estimate_low": {
+        "name": "Vergütung Schätzung laufender Monat untere Grenze"
+      },
+      "payout_estimate_high": {
+        "name": "Vergütung Schätzung laufender Monat obere Grenze"
       },
       "official": {
         "name": "Offizieller Wert zuletzt veröffentlicht"

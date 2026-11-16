@@ -56,6 +56,7 @@ from .const import (
     CONF_PRICE_TIME,
     CONF_PRIOR_METHOD,
     CONF_PRODUCTION_TYPE,
+    CONF_RANGE_WIDTH,
     CONF_REQUEST_DELAY,
     CONF_SPREAD,
     CONF_START_OFFSET,
@@ -291,6 +292,7 @@ class ReferenzmarktwertCoordinator(DataUpdateCoordinator[ReferenzmarktwertData])
             self._period,
             float(self._options[CONF_ERROR_AT_START]),
             float(self._options[CONF_ERROR_AT_END]),
+            float(self._options[CONF_RANGE_WIDTH]),
         )
         return ReferenzmarktwertData(
             estimate=estimate,

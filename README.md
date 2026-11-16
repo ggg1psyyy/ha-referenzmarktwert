@@ -1,6 +1,6 @@
 # Referenzmarktwert PV — Home Assistant integration
 
-> **Status: alpha — 0.1.2.**
+> **Status: alpha — 0.1.3.**
 > The sensors work; the Energy Dashboard compensation statistic is not implemented yet.
 
 A custom [Home Assistant](https://www.home-assistant.io/) integration (installed through the Marketplace) that computes the
@@ -54,9 +54,10 @@ All values in **EUR/kWh**. Attribute names start with their group (`calc_`, `dat
 
 | Sensor | Value | Main attributes |
 |---|---|---|
-| Estimate running month | expected reference market value of the running month | `calc_known_share`, `calc_method`, `calc_month_so_far`, `calc_prior`, `calc_running_base_price`; `data_until_generation`, `data_until_prices`; `month`; `previous_month_source` (official/recomputed), `previous_month_value`; `range_error`, `range_high`, `range_low` (estimate ± expected error) |
+| Estimate running month | expected reference market value of the running month | `calc_known_share`, `calc_method`, `calc_month_so_far`, `calc_prior`, `calc_running_base_price`; `data_until_generation`, `data_until_prices`; `month`; `previous_month_source` (official/recomputed), `previous_month_value`; `range_error`, `range_high`, `range_low` (estimate ± expected error × range width) |
 | Payout estimate running month | estimate − deduction (the expected feed-in price) | `deduction`, `month`, `range_error`, `range_high`, `range_low` |
 | Expected error of the estimate | how far off the estimate can be (one standard deviation, see below) | `month` |
+| Estimate running month low / high, Payout estimate running month low / high *(disabled by default)* | the bounds of the range, the same values as `range_low` / `range_high`, e.g. for a cautious calculation with the low value. Enable them in the entity's settings | `month`, `range_error` (payout: also `deduction`) |
 | Official value latest | the latest month published by E-Control (normally last month; until it is published, the month before) | `file_checked`, `history` (all months; not stored in the database), `month`, `month_base_price`, `month_published` |
 | Payout official value latest | official value − deduction | `month`, `deduction` |
 
@@ -68,6 +69,7 @@ All values in **EUR/kWh**. Attribute names start with their group (`calc_`, `dat
 | **Configure** | Estimate for the rest of the month | base price × last year's capture rate |
 | | Aggregation period | 3600 s (as E-Control) |
 | | Expected error at the start / end of the month | 0.0225 / 0.0025 EUR/kWh |
+| | Range width (range = estimate ± this many expected errors) | 1 |
 | | Interval while PV produces (generation) | 60 min |
 | | Start after the first / end after the last generation (production window, from yesterday's data) | 120 min / 150 min |
 | | Overlap (each download repeats the last hours) | 3 h |
@@ -98,7 +100,7 @@ documentation are written by Claude and reviewed by the maintainer. Commits are 
 | Download schedule (`schedule.py`: production window from the data, daily prices, conditional E-Control check) and stored data (`cache.py`) | done, tested |
 | Energy Dashboard compensation statistic, backfill, services | not started |
 | CI: hassfest, Marketplace (HACS) validation, lint and tests on every push (`.github/workflows/`) | done |
-| Releases | 0.1.0 (pre-release), 0.1.1, 0.1.2 |
+| Releases | 0.1.0 (pre-release), 0.1.1, 0.1.2, 0.1.3 |
 
 ### How the value is calculated
 
@@ -138,7 +140,8 @@ On the last day the error is only the difference between Energy-Charts' data and
 (at most 0.14 ct/kWh); in three months (2024-05, 2026-02, 2026-04) it stays just above 0.10 for that reason.
 
 **Expected error.** The estimate comes with how far off it can be: 2.25 ct/kWh × (1 − `calc_known_share`) + 0.25 ct/kWh
-(both values are options), shown as `range_error` with `range_low`/`range_high` and as its own sensor. Fitted on all days of
+(both values are options), shown as its own sensor. The range `range_low`/`range_high` (and the low/high sensors) is the
+estimate ± `range_error` = expected error × range width (option, default 1; 2 for about 93 %). Fitted on all days of
 2023-02..2026-10, each year left out in turn: 74 % of the real errors were within ± the expected error, 93 % within
 twice it (days 1–10: 71 %, 11–20: 72 %, 21–31: 79 %). It is the typical error, not a limit: in a month whose prices
 move unusually (December 2023, February 2026) the estimate can be off by twice as much for weeks.

@@ -18,6 +18,7 @@ from custom_components.referenzmarktwert.cache import STORAGE_VERSION
 from custom_components.referenzmarktwert.const import (
     CONF_ERROR_AT_END,
     CONF_ERROR_AT_START,
+    CONF_RANGE_WIDTH,
     CONF_REQUEST_DELAY,
     DEFAULT_ECONTROL_XLSX_URL,
     DEFAULT_ENERGY_CHARTS_BASE_URL,
@@ -134,6 +135,60 @@ async def test_expected_error_options(hass: HomeAssistant, config_entry: MockCon
     await setup(hass, entry)
     error = hass.states.get("sensor.referenzmarktwert_pv_expected_error_of_the_estimate")
     assert float(error.state) == pytest.approx(0.01)  # the whole month is known: only the end value
+
+
+BOUNDS = {
+    "sensor.referenzmarktwert_pv_estimate_running_month_low": ("estimate", -1),
+    "sensor.referenzmarktwert_pv_estimate_running_month_high": ("estimate", 1),
+    "sensor.referenzmarktwert_pv_payout_estimate_running_month_low": ("payout_estimate", -1),
+    "sensor.referenzmarktwert_pv_payout_estimate_running_month_high": ("payout_estimate", 1),
+}
+
+
+@pytest.mark.freeze_time(NOW)
+async def test_bound_sensors_are_disabled_by_default(
+    hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts
+) -> None:
+    await setup(hass, config_entry)
+    registry = er.async_get(hass)
+    for entity_id in BOUNDS:
+        assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+        assert hass.states.get(entity_id) is None
+
+
+@pytest.mark.freeze_time(NOW)
+async def test_range_width_sets_attributes_and_bound_sensors(
+    hass: HomeAssistant, config_entry: MockConfigEntry, energy_charts
+) -> None:
+    """One width for all: the main sensors' range attributes and the (enabled) bound sensors."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Referenzmarktwert PV",
+        data=dict(config_entry.data),
+        options={**config_entry.options, CONF_RANGE_WIDTH: 2.0},
+    )
+    await setup(hass, entry)
+    registry = er.async_get(hass)
+    for entity_id in BOUNDS:
+        registry.async_update_entity(entity_id, disabled_by=None)
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    estimate = hass.states.get("sensor.referenzmarktwert_pv_estimate_running_month")
+    error = float(hass.states.get("sensor.referenzmarktwert_pv_expected_error_of_the_estimate").state)
+    assert error == pytest.approx(0.0025)  # the expected error itself does not change
+    assert estimate.attributes["range_error"] == pytest.approx(2 * error)
+    assert estimate.attributes["range_low"] == pytest.approx(float(estimate.state) - 2 * error, abs=1e-6)
+    payout = hass.states.get("sensor.referenzmarktwert_pv_payout_estimate_running_month")
+    assert payout.attributes["range_high"] == pytest.approx(float(payout.state) + 2 * error, abs=1e-6)
+    for entity_id, (main, side) in BOUNDS.items():
+        state = hass.states.get(entity_id)
+        main_state = hass.states.get(f"sensor.referenzmarktwert_pv_{main}_running_month")
+        assert float(state.state) == pytest.approx(float(main_state.state) + side * 2 * error, abs=1e-6)
+        assert float(state.state) == pytest.approx(main_state.attributes["range_low" if side < 0 else "range_high"])
+        assert state.attributes["unit_of_measurement"] == "EUR/kWh"
+        assert state.attributes["month"] == "2026-10"
+        assert state.attributes["range_error"] == pytest.approx(2 * error)
 
 
 @pytest.mark.freeze_time("2026-10-15T09:00:00+00:00")  # 11:00 in Vienna, daylight
@@ -540,9 +595,13 @@ async def test_entity_ids_are_english_in_a_german_home_assistant(
     ids = sorted(e.entity_id for e in er.async_entries_for_config_entry(registry, config_entry.entry_id))
     assert ids == [
         "sensor.referenzmarktwert_pv_estimate_running_month",
+        "sensor.referenzmarktwert_pv_estimate_running_month_high",
+        "sensor.referenzmarktwert_pv_estimate_running_month_low",
         "sensor.referenzmarktwert_pv_expected_error_of_the_estimate",
         "sensor.referenzmarktwert_pv_official_value_latest",
         "sensor.referenzmarktwert_pv_payout_estimate_running_month",
+        "sensor.referenzmarktwert_pv_payout_estimate_running_month_high",
+        "sensor.referenzmarktwert_pv_payout_estimate_running_month_low",
         "sensor.referenzmarktwert_pv_payout_official_value_latest",
     ]
     state = hass.states.get("sensor.referenzmarktwert_pv_official_value_latest")

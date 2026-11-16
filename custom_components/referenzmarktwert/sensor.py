@@ -46,18 +46,23 @@ class ReferenzmarktwertSensorDescription(SensorEntityDescription):
 # Attribute names start with their group: Home Assistant lists attributes sorted by name.
 
 
-def _band(value: float | None, error: float | None) -> dict[str, Any]:
-    """The estimate +- its expected error (about 3 of 4 past daily estimates were inside)."""
+def _bounds(value: float | None, error: float | None) -> tuple[float | None, float | None]:
     if value is None or error is None:
-        return {"range_error": None, "range_low": None, "range_high": None}
-    return {"range_error": error, "range_low": value - error, "range_high": value + error}
+        return None, None
+    return value - error, value + error
+
+
+def _band(value: float | None, error: float | None) -> dict[str, Any]:
+    """The range shown: the estimate +- `range_error` (expected error x the range width option)."""
+    low, high = _bounds(value, error)
+    return {"range_error": error, "range_low": low, "range_high": high}
 
 
 def _estimate_attributes(data: ReferenzmarktwertData) -> dict[str, Any]:
     e = data.estimate
     return {
         "month": month_text(e.month),
-        **_band(e.value, e.expected_error),
+        **_band(e.value, e.range_error),
         "calc_known_share": round(e.known_share, 4) if e.known_share is not None else None,
         "calc_method": e.method.value,
         "calc_month_so_far": e.month_so_far,
@@ -87,6 +92,22 @@ def _payout(value: float | None, data: ReferenzmarktwertData) -> float | None:
     return payout(value, data.deduction) if value is not None else None
 
 
+def _bound_attributes(data: ReferenzmarktwertData) -> dict[str, Any]:
+    return {"month": month_text(data.estimate.month), "range_error": data.estimate.range_error}
+
+
+def _payout_bound_attributes(data: ReferenzmarktwertData) -> dict[str, Any]:
+    return {**_bound_attributes(data), "deduction": data.deduction}
+
+
+def _low(data: ReferenzmarktwertData) -> float | None:
+    return _bounds(data.estimate.value, data.estimate.range_error)[0]
+
+
+def _high(data: ReferenzmarktwertData) -> float | None:
+    return _bounds(data.estimate.value, data.estimate.range_error)[1]
+
+
 def _official_value(data: ReferenzmarktwertData) -> float | None:
     latest = data.latest_official
     return latest.value if latest else None
@@ -106,8 +127,37 @@ SENSORS: tuple[ReferenzmarktwertSensorDescription, ...] = (
         attributes_fn=lambda d: {
             "month": month_text(d.estimate.month),
             "deduction": d.deduction,
-            **_band(_payout(d.estimate.value, d), d.estimate.expected_error),
+            **_band(_payout(d.estimate.value, d), d.estimate.range_error),
         },
+    ),
+    # the range's bounds as sensors of their own, for those who want them (enable in the entity settings)
+    ReferenzmarktwertSensorDescription(
+        key="estimate_low",
+        translation_key="estimate_low",
+        entity_registry_enabled_default=False,
+        value_fn=_low,
+        attributes_fn=_bound_attributes,
+    ),
+    ReferenzmarktwertSensorDescription(
+        key="estimate_high",
+        translation_key="estimate_high",
+        entity_registry_enabled_default=False,
+        value_fn=_high,
+        attributes_fn=_bound_attributes,
+    ),
+    ReferenzmarktwertSensorDescription(
+        key="payout_estimate_low",
+        translation_key="payout_estimate_low",
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: _payout(_low(d), d),
+        attributes_fn=_payout_bound_attributes,
+    ),
+    ReferenzmarktwertSensorDescription(
+        key="payout_estimate_high",
+        translation_key="payout_estimate_high",
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: _payout(_high(d), d),
+        attributes_fn=_payout_bound_attributes,
     ),
     ReferenzmarktwertSensorDescription(
         key="expected_error",

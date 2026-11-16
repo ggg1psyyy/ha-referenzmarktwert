@@ -127,7 +127,8 @@
           "request_delay_seconds": "Pause between requests",
           "spread_minutes": "Random spread of the download times",
           "expected_error_at_start": "Expected error at the start of the month",
-          "expected_error_at_end": "Expected error at the end of the month"
+          "expected_error_at_end": "Expected error at the end of the month",
+          "range_width": "Range width (expected errors)"
         },
         "data_description": {
           "deduction": "Subtracted from the market value for the payout sensors (Hofer Sonne: 0.015 EUR/kWh).",
@@ -146,7 +147,8 @@
           "request_delay_seconds": "Energy-Charts limits how often it may be asked.",
           "spread_minutes": "The planned download times (start and end of the production window, nightly full download, prices after the auction, last year's month after a month change) move by a random amount within this range, new every day, so that not all installations ask Energy-Charts at the same second. 0: off.",
           "expected_error_at_start": "Expected error (one standard deviation) of the estimate before any of the month is known. It shrinks with the known share of the month's PV energy. Default from 45 months of history: about 3 of 4 months ended within the estimate ± this error.",
-          "expected_error_at_end": "What remains when the whole month is known: E-Control's own computation differs slightly from the data."
+          "expected_error_at_end": "What remains when the whole month is known: E-Control's own computation differs slightly from the data.",
+          "range_width": "The range shown (range_low/range_high and the low/high sensors) is the estimate ± this many expected errors. 1: about 3 of 4 past daily estimates were inside, 2: about 93 %."
         }
       }
     }
@@ -166,6 +168,18 @@
       },
       "payout_estimate": {
         "name": "Payout estimate running month"
+      },
+      "estimate_low": {
+        "name": "Estimate running month low"
+      },
+      "estimate_high": {
+        "name": "Estimate running month high"
+      },
+      "payout_estimate_low": {
+        "name": "Payout estimate running month low"
+      },
+      "payout_estimate_high": {
+        "name": "Payout estimate running month high"
       },
       "official": {
         "name": "Official value latest"

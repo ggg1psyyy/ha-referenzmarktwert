@@ -16,6 +16,7 @@ from custom_components.referenzmarktwert.const import (
     CONF_ERROR_AT_START,
     CONF_PRIOR_METHOD,
     CONF_PRODUCTION_TYPE,
+    CONF_RANGE_WIDTH,
     CONF_REQUEST_DELAY,
     CONF_TIME_ZONE,
     DEFAULT_DATA,
@@ -205,6 +206,7 @@ async def test_options_flow(hass: HomeAssistant, config_entry: MockConfigEntry) 
         CONF_PRIOR_METHOD: "previous_month",
         CONF_REQUEST_DELAY: 2,
         CONF_ERROR_AT_START: 0.03,
+        CONF_RANGE_WIDTH: 2.0,
     }
     with patch(SETUP, return_value=True):
         result = await hass.config_entries.options.async_configure(result["flow_id"], new)
@@ -212,6 +214,7 @@ async def test_options_flow(hass: HomeAssistant, config_entry: MockConfigEntry) 
     assert config_entry.options[CONF_DEDUCTION] == 0.016
     assert config_entry.options[CONF_PRIOR_METHOD] == "previous_month"
     assert config_entry.options[CONF_ERROR_AT_START] == 0.03
+    assert config_entry.options[CONF_RANGE_WIDTH] == 2.0
 
 
 async def test_forms_serialize_for_the_frontend(hass: HomeAssistant, config_entry: MockConfigEntry) -> None:

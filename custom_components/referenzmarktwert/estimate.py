@@ -17,6 +17,7 @@ from .const import (
     DEFAULT_ERROR_AT_END_EUR_PER_KWH,
     DEFAULT_ERROR_AT_START_EUR_PER_KWH,
     DEFAULT_PRIOR_METHOD,
+    DEFAULT_RANGE_WIDTH,
     KWH_PER_MWH,
     PriorMethod,
 )
@@ -45,6 +46,7 @@ class Estimate:
     month: Month
     value: float | None  # whole-month estimate
     expected_error: float | None  # one standard deviation of `value` (see calc.expected_error)
+    range_error: float | None  # half the width of the range shown: expected_error x range width
     month_so_far: float | None  # generation-weighted value of the complete hours so far
     known_share: float | None  # expected share of the month's generation already known (0..1)
     prior: float | None  # estimate for the rest of the month
@@ -81,6 +83,7 @@ def estimate_month(
     period: int = DEFAULT_AGGREGATION_SECONDS,
     error_at_start: float = DEFAULT_ERROR_AT_START_EUR_PER_KWH,
     error_at_end: float = DEFAULT_ERROR_AT_END_EUR_PER_KWH,
+    range_width: float = DEFAULT_RANGE_WIDTH,
 ) -> Estimate:
     """Estimate the month containing `now`.
 
@@ -137,10 +140,12 @@ def estimate_month(
     prior = calc.prior(month, pv, base, method, running_base, weight)
     so_far_value = so_far.eur_per_kwh if so_far else None
     value = calc.blend(so_far_value, prior, known_share)
+    error = calc.expected_error(known_share, error_at_start, error_at_end) if value is not None else None
     return Estimate(
         month=month,
         value=value,
-        expected_error=calc.expected_error(known_share, error_at_start, error_at_end) if value is not None else None,
+        expected_error=error,
+        range_error=error * range_width if error is not None else None,
         month_so_far=so_far_value,
         known_share=known_share,
         prior=prior,

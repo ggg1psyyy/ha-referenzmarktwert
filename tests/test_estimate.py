@@ -85,6 +85,10 @@ def test_day_ten_blends_prior_and_month_so_far(official: dict) -> None:
         now, VIENNA, data, load("2025-10", False), values, bases, error_at_start=0.05, error_at_end=0
     )
     assert custom.expected_error == pytest.approx(0.05 * (1 - result.known_share))
+    assert result.range_error == pytest.approx(result.expected_error)  # default width: one expected error
+    wide = estimate_month(now, VIENNA, data, load("2025-10", False), values, bases, range_width=2.0)
+    assert wide.range_error == pytest.approx(2 * result.expected_error)
+    assert wide.expected_error == pytest.approx(result.expected_error)
 
 
 def test_partial_hour_is_not_used(official: dict) -> None:
@@ -111,6 +115,7 @@ def test_missing_data_degrades_gracefully(official: dict) -> None:
     result = estimate_month(now, VIENNA, MonthData([], []), None, {}, {})
     assert result.value is None and result.month_so_far is None
     assert result.expected_error is None  # no estimate, no error
+    assert result.range_error is None
     assert result.previous_source is PreviousSource.MISSING
     # no reference (last year's data failed): the month so far is used as is
     now = OCT_START + 10 * 86400
